@@ -130,6 +130,7 @@ export default function App() {
   );
   const [isDemo, setIsDemo] = useState(() => IS_DEMO("ph_portfolio"));
   const [rateLimitSecs, setRateLimitSecs] = useState(0);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
   const containerRef = useRef(null);
   const [boxSize, setBoxSize] = useState({ w: 700, h: 460 });
 
@@ -151,6 +152,13 @@ export default function App() {
       setIsDemo(false);
     }
   }, [portfolio]);
+
+  // Track viewport width for responsive layout
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
 
   // Auto-fetch on mount using shared key when user has no key saved
   useEffect(() => {
@@ -387,9 +395,9 @@ export default function App() {
       )}
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: `1px solid ${S.border}`, flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <a href="/" title="Back to Karta home" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", color: "inherit" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "8px 12px" : "12px 18px", borderBottom: `1px solid ${S.border}`, flexShrink: 0, gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 12, minWidth: 0 }}>
+          <a href="/" title="Back to Karta home" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none", color: "inherit", minWidth: 0 }}>
             <svg width="22" height="22" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
               <rect width="22" height="22" rx="5" fill="#0a1a12"/>
               {[["#1a4731","#1e5c3e","#2d7a52"],["#1e5c3e","#2d7a52","#3a9966"],["#2d7a52","#3a9966","#4ade80"],["#1a3a28","#2d7a52","#22c55e"]].map((row, ri) =>
@@ -400,10 +408,10 @@ export default function App() {
                 })
               )}
             </svg>
-            <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.5px" }}>{portfolioName}</span>
+            <span style={{ fontSize: isMobile ? 14 : 18, fontWeight: 800, letterSpacing: "-0.5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: isMobile ? 110 : "none" }}>{portfolioName}</span>
           </a>
-          {aggReturn !== null && (
-            <span style={{ fontSize: 13, fontWeight: 700, color: aggReturn >= 0 ? "#4ade80" : "#f87171" }}>
+          {aggReturn !== null && !isMobile && (
+            <span style={{ fontSize: 13, fontWeight: 700, color: aggReturn >= 0 ? "#4ade80" : "#f87171", flexShrink: 0 }}>
               {aggReturn >= 0 ? "▲" : "▼"} {Math.abs(aggReturn).toFixed(2)}%
             </span>
           )}
@@ -411,7 +419,7 @@ export default function App() {
             <button
               onClick={() => setPrivacyMode(p => !p)}
               title={privacyMode ? "Show portfolio value" : "Hide portfolio value"}
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 5, border: `1px solid ${S.border}`, background: S.panel, color: privacyMode ? S.muted : S.text, cursor: "pointer", fontSize: 12 }}
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: isMobile ? "3px 7px" : "3px 10px", borderRadius: 5, border: `1px solid ${S.border}`, background: S.panel, color: privacyMode ? S.muted : S.text, cursor: "pointer", fontSize: 12, flexShrink: 0 }}
             >
               {privacyMode ? (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -425,25 +433,31 @@ export default function App() {
                   <circle cx="12" cy="12" r="3"/>
                 </svg>
               )}
-              <span style={{ fontWeight: 600, letterSpacing: privacyMode ? "0.15em" : 0 }}>
-                {privacyMode ? "••••••" : `$${totalValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
-              </span>
+              {!isMobile && (
+                <span style={{ fontWeight: 600, letterSpacing: privacyMode ? "0.15em" : 0 }}>
+                  {privacyMode ? "••••••" : `$${totalValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+                </span>
+              )}
             </button>
           )}
         </div>
-        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          <div title="Your portfolio is stored locally in your browser only. Nothing is sent to our servers." style={{
-            display: "flex", alignItems: "center", gap: 5,
-            padding: "4px 10px", borderRadius: 6,
-            border: "1px solid rgba(74,222,128,0.2)",
-            background: "rgba(74,222,128,0.06)",
-            fontSize: 11, color: "#4ade80", fontWeight: 600,
-            cursor: "default", letterSpacing: "0.02em",
-          }}>
-            🔒 Local only
-          </div>
+        <div style={{ display: "flex", gap: isMobile ? 3 : 4, alignItems: "center", flexShrink: 0 }}>
+          {!isMobile && (
+            <div title="Your portfolio is stored locally in your browser only. Nothing is sent to our servers." style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "4px 10px", borderRadius: 6,
+              border: "1px solid rgba(74,222,128,0.2)",
+              background: "rgba(74,222,128,0.06)",
+              fontSize: 11, color: "#4ade80", fontWeight: 600,
+              cursor: "default", letterSpacing: "0.02em",
+            }}>
+              🔒 Local only
+            </div>
+          )}
           {["heatmap", "table", "setup"].map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ ...btnBase(tab === t), textTransform: "capitalize" }}>{t}</button>
+            <button key={t} onClick={() => setTab(t)} style={{ ...btnBase(tab === t), textTransform: "capitalize", padding: isMobile ? "5px 9px" : "5px 13px", fontSize: isMobile ? 12 : 13 }}>
+              {isMobile ? (t === "heatmap" ? "Map" : t) : t}
+            </button>
           ))}
         </div>
       </div>
@@ -488,10 +502,10 @@ export default function App() {
             </>
           ) : (
             <>
-              <span>Using Karta's shared key — prices cached every 15 min</span>
+              <span>{isMobile ? "Shared key · 15 min cache" : "Using Karta's shared key — prices cached every 15 min"}</span>
               <span style={{ color: "#1e293b" }}>·</span>
               <button onClick={() => setTab("setup")} style={{ background: "none", border: "none", cursor: "pointer", color: "#93c5fd", fontSize: 12, fontWeight: 600, padding: 0 }}>
-                Get your own free key →
+                {isMobile ? "Get your own key →" : "Get your own free key →"}
               </button>
             </>
           )}
@@ -569,7 +583,7 @@ export default function App() {
             </div>
           )}
 
-          <div ref={containerRef} style={{ width: "100%", height: "100%", position: "relative" }}>
+          <div ref={containerRef} style={{ width: "100%", height: "100%", position: "relative" }} onClick={isMobile ? () => setTooltip(null) : undefined}>
             {rects.map(rect => {
               const gap = 2;
               const bx = rect.x + gap, by = rect.y + gap;
@@ -581,9 +595,10 @@ export default function App() {
               return (
                 <div
                   key={rect.id}
-                  style={{ position: "absolute", left: bx, top: by, width: bw, height: bh, background: perfColor(rect.perf), borderRadius: 4, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflow: "hidden", transition: "filter .12s", cursor: "crosshair" }}
-                  onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.25)"; setTooltip(rect); }}
-                  onMouseLeave={e => { e.currentTarget.style.filter = ""; setTooltip(null); }}
+                  style={{ position: "absolute", left: bx, top: by, width: bw, height: bh, background: perfColor(rect.perf), borderRadius: 4, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflow: "hidden", transition: "filter .12s", cursor: isMobile ? "pointer" : "crosshair" }}
+                  onMouseEnter={isMobile ? undefined : e => { e.currentTarget.style.filter = "brightness(1.25)"; setTooltip(rect); }}
+                  onMouseLeave={isMobile ? undefined : e => { e.currentTarget.style.filter = ""; setTooltip(null); }}
+                  onClick={isMobile ? e => { e.stopPropagation(); setTooltip(tooltip?.id === rect.id ? null : rect); } : undefined}
                 >
                   {showTicker && <div style={{ fontSize: Math.max(9, Math.min(22, bw / 5.5)), fontWeight: 800, color: "#fff", lineHeight: 1.1, letterSpacing: "-0.02em" }}>{rect.ticker}</div>}
                   {showPerf  && rect.perf !== null && <div style={{ fontSize: Math.max(8, Math.min(15, bw / 7)), fontWeight: 700, color: "rgba(255,255,255,.88)", lineHeight: 1.2 }}>{rect.perf >= 0 ? "+" : ""}{rect.perf.toFixed(2)}%</div>}
@@ -592,8 +607,11 @@ export default function App() {
               );
             })}
             {tooltip && (
-              <div style={{ position: "absolute", bottom: 48, left: 16, background: "#1e293b", border: `1px solid ${S.border}`, borderRadius: 8, padding: "10px 14px", pointerEvents: "none", zIndex: 20, minWidth: 160 }}>
-                <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>{tooltip.ticker}</div>
+              <div style={{ position: "absolute", bottom: 48, left: 16, background: "#1e293b", border: `1px solid ${S.border}`, borderRadius: 8, padding: "10px 14px", pointerEvents: isMobile ? "auto" : "none", zIndex: 20, minWidth: 160 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <div style={{ fontWeight: 800, fontSize: 16 }}>{tooltip.ticker}</div>
+                  {isMobile && <button onClick={() => setTooltip(null)} style={{ background: "none", border: "none", color: S.muted, fontSize: 18, cursor: "pointer", padding: "0 0 0 12px", lineHeight: 1 }}>×</button>}
+                </div>
                 {tooltip.price && <div style={{ fontSize: 13, color: S.muted }}>Price: <strong style={{ color: S.text }}>${tooltip.price.toFixed(2)}</strong></div>}
                 {tooltip.perf !== null && <div style={{ fontSize: 13, color: tooltip.perf >= 0 ? "#4ade80" : "#f87171", fontWeight: 700 }}>Today: {tooltip.perf >= 0 ? "+" : ""}{tooltip.perf.toFixed(2)}%</div>}
                 <div style={{ fontSize: 12, color: S.muted, marginTop: 4 }}>{((getWeight(tooltip.ticker) / totalValue) * 100).toFixed(1)}% of portfolio</div>
@@ -614,7 +632,8 @@ export default function App() {
           {Object.keys(stockData).length === 0 ? (
             <div style={{ textAlign: "center", color: S.muted, padding: 48, fontSize: 14 }}>Load data using the Refresh button above.</div>
           ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${S.border}`, position: "sticky", top: 0, background: S.bg }}>
                   {["Ticker", "Price", "Shares", "Value", "Weight", ...PERIODS.map(p => p.label)].map((h, i) => (
@@ -648,6 +667,7 @@ export default function App() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
 

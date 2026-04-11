@@ -161,10 +161,16 @@ function Step({ n, title, desc }) {
 // ── Main ──────────────────────────────────────────────────────────
 export default function Landing() {
   const [scrolled, setScrolled] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 24);
     window.addEventListener("scroll", fn);
     return () => window.removeEventListener("scroll", fn);
+  }, []);
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
   }, []);
 
   const S = { bg: "#080b12", border: "rgba(255,255,255,0.07)", green: "#4ade80", muted: "#64748b", text: "#e2e8f0" };
@@ -183,7 +189,7 @@ export default function Landing() {
       {/* ── Nav ── */}
       <nav style={{
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
-        padding: "0 32px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60,
+        padding: isMobile ? "0 16px" : "0 32px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56,
         background: scrolled ? "rgba(8,11,18,0.92)" : "transparent",
         backdropFilter: scrolled ? "blur(16px)" : "none",
         borderBottom: scrolled ? `1px solid ${S.border}` : "none",
@@ -194,16 +200,18 @@ export default function Landing() {
           <span style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 20, letterSpacing: "-0.01em" }}>Karta</span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <a href="https://github.com/gopithota/karta" target="_blank" rel="noreferrer"
-            style={{ padding: "5px 14px", borderRadius: 8, border: `1px solid ${S.border}`, color: S.muted, fontSize: 12, textDecoration: "none", transition: "all 0.2s" }}
-            onMouseEnter={e => { e.currentTarget.style.color = S.text; e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)"; }}
-            onMouseLeave={e => { e.currentTarget.style.color = S.muted; e.currentTarget.style.borderColor = S.border; }}
-          >GitHub</a>
-          <a href="https://buymeacoffee.com" target="_blank" rel="noreferrer"
-            style={{ padding: "5px 14px", borderRadius: 8, border: "1px solid rgba(255,214,0,0.18)", color: "#fde68a", fontSize: 12, textDecoration: "none", transition: "all 0.2s" }}
-            onMouseEnter={e => e.currentTarget.style.background = "rgba(255,214,0,0.08)"}
-            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-          >☕ Coffee</a>
+          {!isMobile && <>
+            <a href="https://github.com/gopithota/karta" target="_blank" rel="noreferrer"
+              style={{ padding: "5px 14px", borderRadius: 8, border: `1px solid ${S.border}`, color: S.muted, fontSize: 12, textDecoration: "none", transition: "all 0.2s" }}
+              onMouseEnter={e => { e.currentTarget.style.color = S.text; e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = S.muted; e.currentTarget.style.borderColor = S.border; }}
+            >GitHub</a>
+            <a href="https://buymeacoffee.com" target="_blank" rel="noreferrer"
+              style={{ padding: "5px 14px", borderRadius: 8, border: "1px solid rgba(255,214,0,0.18)", color: "#fde68a", fontSize: 12, textDecoration: "none", transition: "all 0.2s" }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,214,0,0.08)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >☕ Coffee</a>
+          </>}
           <a href="/app"
             style={{ padding: "6px 18px", borderRadius: 8, background: S.green, color: "#051a0a", fontSize: 13, fontWeight: 800, textDecoration: "none", transition: "opacity 0.2s" }}
             onMouseEnter={e => e.currentTarget.style.opacity = "0.82"}
@@ -213,7 +221,7 @@ export default function Landing() {
       </nav>
 
       {/* ── Hero ── */}
-      <section style={{ position: "relative", zIndex: 1, maxWidth: 920, margin: "0 auto", padding: "124px 24px 68px", textAlign: "center" }}>
+      <section style={{ position: "relative", zIndex: 1, maxWidth: 920, margin: "0 auto", padding: isMobile ? "88px 16px 48px" : "124px 24px 68px", textAlign: "center" }}>
 
         {/* Logo */}
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 28 }}>
@@ -294,14 +302,14 @@ export default function Landing() {
               ))}
             </div>
           </div>
-          <div style={{ height: 210 }}><DemoHeatmap /></div>
+          <div style={{ height: isMobile ? 160 : 210 }}><DemoHeatmap /></div>
         </div>
         <p style={{ fontSize: 11, color: "#1e2d3d", marginTop: 10, fontFamily: "'JetBrains Mono', monospace" }}>↑ live demo — prices drift in real time</p>
       </section>
 
       {/* ── Stats ── */}
-      <section style={{ position: "relative", zIndex: 1, maxWidth: 820, margin: "0 auto", padding: "0 24px 64px" }}>
-        <div style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${S.border}`, borderRadius: 16, padding: "40px 48px", display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 32 }}>
+      <section style={{ position: "relative", zIndex: 1, maxWidth: 820, margin: "0 auto", padding: isMobile ? "0 16px 48px" : "0 24px 64px" }}>
+        <div style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${S.border}`, borderRadius: 16, padding: isMobile ? "28px 20px" : "40px 48px", display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 32 }}>
           <UserCounter />
           <Stat value="Free" label="FOREVER · NO ADS" />
           <Stat value="0 kb" label="DATA SENT TO SERVERS" />
@@ -309,7 +317,7 @@ export default function Landing() {
       </section>
 
       {/* ── Features ── */}
-      <section style={{ position: "relative", zIndex: 1, maxWidth: 960, margin: "0 auto", padding: "0 24px 64px" }}>
+      <section style={{ position: "relative", zIndex: 1, maxWidth: 960, margin: "0 auto", padding: isMobile ? "0 16px 48px" : "0 24px 64px" }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <h2 style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 400, letterSpacing: "-0.02em", margin: "0 0 12px" }}>
             Everything you need.<br /><em>Nothing you don't.</em>
@@ -332,7 +340,7 @@ export default function Landing() {
         <div style={{
           background: "rgba(74,222,128,0.03)",
           border: "1px solid rgba(74,222,128,0.15)",
-          borderRadius: 20, padding: "48px 40px",
+          borderRadius: 20, padding: isMobile ? "32px 20px" : "48px 40px",
         }}>
           <div style={{ textAlign: "center", marginBottom: 44 }}>
             <div style={{ fontSize: 36, marginBottom: 14 }}>🔒</div>
@@ -424,7 +432,7 @@ export default function Landing() {
 
       {/* ── Final CTA ── */}
       <section style={{ position: "relative", zIndex: 1, maxWidth: 860, margin: "0 auto", padding: "0 24px 100px" }}>
-        <div style={{ background: "linear-gradient(135deg, rgba(74,222,128,0.045), rgba(59,130,246,0.045))", border: "1px solid rgba(74,222,128,0.12)", borderRadius: 20, padding: "56px 40px", textAlign: "center" }}>
+        <div style={{ background: "linear-gradient(135deg, rgba(74,222,128,0.045), rgba(59,130,246,0.045))", border: "1px solid rgba(74,222,128,0.12)", borderRadius: 20, padding: isMobile ? "36px 20px" : "56px 40px", textAlign: "center" }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}><KartaLogo size={56} /></div>
           <h2 style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: "clamp(26px, 4vw, 42px)", fontWeight: 400, letterSpacing: "-0.02em", margin: "0 0 14px" }}>
             Chart your portfolio.
@@ -446,7 +454,7 @@ export default function Landing() {
       </section>
 
       {/* ── Footer ── */}
-      <footer style={{ position: "relative", zIndex: 1, borderTop: `1px solid ${S.border}`, padding: "24px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+      <footer style={{ position: "relative", zIndex: 1, borderTop: `1px solid ${S.border}`, padding: isMobile ? "20px 16px" : "24px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <KartaLogo size={22} />
           <span style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 15 }}>Karta</span>
