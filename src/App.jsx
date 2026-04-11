@@ -703,6 +703,15 @@ export default function App() {
                     : <span style={{ fontSize: 11, fontWeight: 600, color: "#93c5fd", background: "rgba(147,197,253,0.08)", border: "1px solid rgba(147,197,253,0.15)", padding: "2px 8px", borderRadius: 20 }}>Using Karta's shared key</span>
                   }
                 </div>
+                {!apiKey && (
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px", borderRadius: 8, background: "rgba(147,197,253,0.06)", border: "1px solid rgba(147,197,253,0.14)", marginBottom: 10 }}>
+                    <span style={{ fontSize: 15, lineHeight: 1 }}>ℹ️</span>
+                    <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.6 }}>
+                      Karta's <strong style={{ color: "#93c5fd" }}>shared key</strong> is active by default, but it's rate-limited — heavy traffic can temporarily pause refreshes.
+                      {" "}<strong style={{ color: "#e2e8f0" }}>Get your own free key</strong> for uninterrupted, unlimited access to your portfolio data.
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8 }}>
                   <input
                     type="password"
