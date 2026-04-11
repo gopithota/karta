@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 // ── Karta logo — geometric heatmap grid mark ──────────────────────
 function KartaLogo({ size = 36 }) {
@@ -158,10 +158,77 @@ function Step({ n, title, desc }) {
   );
 }
 
+// ── Ticker tape data ─────────────────────────────────────────────
+const TICKER_ITEMS = [
+  { sym: "AAPL", chg: +1.24 }, { sym: "NVDA", chg: +8.40 },
+  { sym: "TSLA", chg: -5.20 }, { sym: "MSFT", chg: +0.87 },
+  { sym: "META", chg: +3.11 }, { sym: "AMZN", chg: -1.88 },
+  { sym: "GOOGL", chg: +2.67 }, { sym: "JPM",  chg: +0.94 },
+  { sym: "BRK.B", chg: +0.18 }, { sym: "V",    chg: +0.42 },
+  { sym: "NFLX", chg: -2.14 }, { sym: "AMD",  chg: +5.33 },
+  { sym: "DIS",  chg: -0.76 }, { sym: "COIN", chg: +4.12 },
+  { sym: "GS",   chg: +1.03 }, { sym: "SPY",  chg: +0.61 },
+];
+
+function TickerTape() {
+  const items = [...TICKER_ITEMS, ...TICKER_ITEMS];
+  return (
+    <div className="ticker-wrap">
+      <div className="ticker-track">
+        {items.map((item, i) => (
+          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 16px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+            <span style={{ color: "#94a3b8", fontWeight: 700 }}>{item.sym}</span>
+            <span style={{ color: item.chg >= 0 ? "#4ade80" : "#f87171", fontWeight: 600 }}>
+              {item.chg >= 0 ? "+" : ""}{item.chg.toFixed(2)}%
+            </span>
+            <span style={{ color: "#1e2d3d" }}>·</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Scroll-reveal hook ────────────────────────────────────────────
+function useScrollReveal(count) {
+  const refs = useRef([]);
+  const [revealed, setRevealed] = useState(() => Array(count).fill(false));
+  useEffect(() => {
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const i = refs.current.indexOf(entry.target);
+          if (i !== -1) {
+            setRevealed(prev => { const n = [...prev]; n[i] = true; return n; });
+            obs.unobserve(entry.target);
+          }
+        }
+      });
+    }, { threshold: 0.1 });
+    refs.current.forEach(el => { if (el) obs.observe(el); });
+    return () => obs.disconnect();
+  }, []);
+  return [refs, revealed];
+}
+
 // ── Main ──────────────────────────────────────────────────────────
 export default function Landing() {
   const [scrolled, setScrolled] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
+  const [revealRefs, revealed] = useScrollReveal(5);
+
+  const floatingTiles = useMemo(() => [
+    { left: "8%",  size: 28, dur: 14, delay: 0,   color: "rgba(74,222,128,0.12)" },
+    { left: "21%", size: 18, dur: 18, delay: 3.5, color: "rgba(248,113,113,0.10)" },
+    { left: "37%", size: 34, dur: 12, delay: 1.2, color: "rgba(74,222,128,0.08)" },
+    { left: "52%", size: 22, dur: 16, delay: 5.0, color: "rgba(74,222,128,0.14)" },
+    { left: "66%", size: 14, dur: 20, delay: 2.8, color: "rgba(248,113,113,0.09)" },
+    { left: "78%", size: 30, dur: 13, delay: 0.7, color: "rgba(74,222,128,0.10)" },
+    { left: "88%", size: 20, dur: 17, delay: 4.2, color: "rgba(248,113,113,0.11)" },
+    { left: "14%", size: 16, dur: 22, delay: 6.5, color: "rgba(74,222,128,0.07)" },
+    { left: "59%", size: 26, dur: 15, delay: 3.1, color: "rgba(248,113,113,0.08)" },
+  ], []);
+
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 24);
     window.addEventListener("scroll", fn);
@@ -221,7 +288,20 @@ export default function Landing() {
       </nav>
 
       {/* ── Hero ── */}
-      <section style={{ position: "relative", zIndex: 1, maxWidth: 920, margin: "0 auto", padding: isMobile ? "88px 16px 48px" : "124px 24px 68px", textAlign: "center" }}>
+      <section style={{ position: "relative", zIndex: 1, maxWidth: 920, margin: "0 auto", padding: isMobile ? "88px 16px 48px" : "124px 24px 68px", textAlign: "center", overflow: "hidden" }}>
+
+        {/* Floating background tiles */}
+        <div aria-hidden="true" style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", zIndex: 0 }}>
+          {floatingTiles.slice(0, isMobile ? 5 : 9).map((t, i) => (
+            <div key={i} className="float-tile" style={{
+              position: "absolute", bottom: "-60px", left: t.left,
+              width: t.size, height: t.size, borderRadius: 4,
+              background: t.color,
+              animationDuration: `${t.dur}s`,
+              animationDelay: `${t.delay}s`,
+            }} />
+          ))}
+        </div>
 
         {/* Logo */}
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 28 }}>
@@ -279,8 +359,13 @@ export default function Landing() {
           >☕ Buy me a coffee</a>
         </div>
 
+        {/* Ticker tape */}
+        <div style={{ position: "relative", zIndex: 1, marginTop: 36 }}>
+          <TickerTape />
+        </div>
+
         {/* Demo window */}
-        <div style={{ marginTop: 60, background: "#0c0f18", border: `1px solid ${S.border}`, borderRadius: 16, overflow: "hidden", boxShadow: "0 48px 120px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04)" }}>
+        <div style={{ marginTop: 28, background: "#0c0f18", border: `1px solid ${S.border}`, borderRadius: 16, overflow: "hidden", boxShadow: "0 48px 120px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04)" }}>
           <div style={{ padding: "11px 16px", borderBottom: `1px solid ${S.border}`, display: "flex", alignItems: "center", gap: 10, background: "#09111e" }}>
             <div style={{ display: "flex", gap: 6 }}>
               {["#f87171","#fbbf24","#4ade80"].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: "50%", background: c, opacity: 0.6 }} />)}
@@ -308,7 +393,7 @@ export default function Landing() {
       </section>
 
       {/* ── Stats ── */}
-      <section style={{ position: "relative", zIndex: 1, maxWidth: 820, margin: "0 auto", padding: isMobile ? "0 16px 48px" : "0 24px 64px" }}>
+      <section ref={el => revealRefs.current[0] = el} style={{ position: "relative", zIndex: 1, maxWidth: 820, margin: "0 auto", padding: isMobile ? "0 16px 48px" : "0 24px 64px", opacity: revealed[0] ? 1 : 0, transform: revealed[0] ? "none" : "translateY(24px)", transition: "opacity 0.6s ease, transform 0.6s ease" }}>
         <div style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${S.border}`, borderRadius: 16, padding: isMobile ? "28px 20px" : "40px 48px", display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 32 }}>
           <UserCounter />
           <Stat value="Free" label="FOREVER · NO ADS" />
@@ -317,7 +402,7 @@ export default function Landing() {
       </section>
 
       {/* ── Features ── */}
-      <section style={{ position: "relative", zIndex: 1, maxWidth: 960, margin: "0 auto", padding: isMobile ? "0 16px 48px" : "0 24px 64px" }}>
+      <section ref={el => revealRefs.current[1] = el} style={{ position: "relative", zIndex: 1, maxWidth: 960, margin: "0 auto", padding: isMobile ? "0 16px 48px" : "0 24px 64px", opacity: revealed[1] ? 1 : 0, transform: revealed[1] ? "none" : "translateY(24px)", transition: "opacity 0.6s ease, transform 0.6s ease" }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <h2 style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 400, letterSpacing: "-0.02em", margin: "0 0 12px" }}>
             Everything you need.<br /><em>Nothing you don't.</em>
@@ -325,18 +410,24 @@ export default function Landing() {
           <p style={{ color: S.muted, fontSize: 15 }}>Built for investors who want signal, not noise.</p>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
-          <Feature icon="🟩" title="Visual performance at a glance" desc="Deep red to deep green color scale. Spot your winners and losers instantly — no spreadsheet scanning." />
-          <Feature icon="⚖️" title="Weighted by your holdings" desc="Tile size reflects actual position value. Your biggest bets take the most space, just like Finviz." />
-          <Feature icon="🔢" title="Weighted portfolio return" desc="The header shows your aggregate return for the day, weighted by your actual position sizes — not a simple average." />
-          <Feature icon="🔒" title="Privacy by default" desc="API key and portfolio live in your browser. Nothing is ever sent to our servers." />
-          <Feature icon="⚡" title="Progressive loading" desc="Your map fills tile-by-tile as data arrives — no blank screen while waiting for every stock." />
-          <Feature icon="📋" title="Paste from your spreadsheet" desc="Bulk import from Excel or Google Sheets. Two columns, one paste, your whole portfolio in seconds." />
+          {[
+            { icon: "🟩", title: "Visual performance at a glance", desc: "Deep red to deep green color scale. Spot your winners and losers instantly — no spreadsheet scanning." },
+            { icon: "⚖️", title: "Weighted by your holdings", desc: "Tile size reflects actual position value. Your biggest bets take the most space, just like Finviz." },
+            { icon: "🔢", title: "Weighted portfolio return", desc: "The header shows your aggregate return for the day, weighted by your actual position sizes — not a simple average." },
+            { icon: "🔒", title: "Privacy by default", desc: "API key and portfolio live in your browser. Nothing is ever sent to our servers." },
+            { icon: "⚡", title: "Progressive loading", desc: "Your map fills tile-by-tile as data arrives — no blank screen while waiting for every stock." },
+            { icon: "📋", title: "Paste from your spreadsheet", desc: "Bulk import from Excel or Google Sheets. Two columns, one paste, your whole portfolio in seconds." },
+          ].map((f, i) => (
+            <div key={f.title} className={revealed[1] ? "card-reveal visible" : "card-reveal"} style={{ transitionDelay: `${i * 80}ms` }}>
+              <Feature icon={f.icon} title={f.title} desc={f.desc} />
+            </div>
+          ))}
         </div>
       </section>
 
 
       {/* ── Privacy section ── */}
-      <section style={{ position: "relative", zIndex: 1, maxWidth: 860, margin: "0 auto", padding: "0 24px 64px" }}>
+      <section ref={el => revealRefs.current[2] = el} style={{ position: "relative", zIndex: 1, maxWidth: 860, margin: "0 auto", padding: "0 24px 64px", opacity: revealed[2] ? 1 : 0, transform: revealed[2] ? "none" : "translateY(24px)", transition: "opacity 0.6s ease, transform 0.6s ease" }}>
         <div style={{
           background: "rgba(74,222,128,0.03)",
           border: "1px solid rgba(74,222,128,0.15)",
@@ -417,7 +508,7 @@ export default function Landing() {
       </section>
 
       {/* ── How it works ── */}
-      <section style={{ position: "relative", zIndex: 1, maxWidth: 640, margin: "0 auto", padding: "0 24px 64px" }}>
+      <section ref={el => revealRefs.current[3] = el} style={{ position: "relative", zIndex: 1, maxWidth: 640, margin: "0 auto", padding: "0 24px 64px", opacity: revealed[3] ? 1 : 0, transform: revealed[3] ? "none" : "translateY(24px)", transition: "opacity 0.6s ease, transform 0.6s ease" }}>
         <div style={{ textAlign: "center", marginBottom: 44 }}>
           <h2 style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 400, letterSpacing: "-0.02em", margin: "0 0 10px" }}>
             Your map, ready<br /><em>in 60 seconds.</em>
@@ -431,7 +522,7 @@ export default function Landing() {
       </section>
 
       {/* ── Final CTA ── */}
-      <section style={{ position: "relative", zIndex: 1, maxWidth: 860, margin: "0 auto", padding: "0 24px 100px" }}>
+      <section ref={el => revealRefs.current[4] = el} style={{ position: "relative", zIndex: 1, maxWidth: 860, margin: "0 auto", padding: "0 24px 100px", opacity: revealed[4] ? 1 : 0, transform: revealed[4] ? "none" : "translateY(24px)", transition: "opacity 0.6s ease, transform 0.6s ease" }}>
         <div style={{ background: "linear-gradient(135deg, rgba(74,222,128,0.045), rgba(59,130,246,0.045))", border: "1px solid rgba(74,222,128,0.12)", borderRadius: 20, padding: isMobile ? "36px 20px" : "56px 40px", textAlign: "center" }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}><KartaLogo size={56} /></div>
           <h2 style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: "clamp(26px, 4vw, 42px)", fontWeight: 400, letterSpacing: "-0.02em", margin: "0 0 14px" }}>
@@ -476,6 +567,28 @@ export default function Landing() {
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #080b12; }
         ::selection { background: rgba(74,222,128,0.2); }
+
+        .float-tile { animation: floatUp linear infinite; will-change: transform, opacity; }
+        @keyframes floatUp {
+          0%   { transform: translateY(0) rotate(0deg);      opacity: 0; }
+          10%  { opacity: 1; }
+          90%  { opacity: 1; }
+          100% { transform: translateY(-520px) rotate(12deg); opacity: 0; }
+        }
+
+        .ticker-wrap {
+          overflow: hidden; width: 100%;
+          mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+          -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+          border-top: 1px solid rgba(255,255,255,0.06);
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          padding: 9px 0; background: rgba(255,255,255,0.015);
+        }
+        .ticker-track { display: inline-flex; align-items: center; animation: tickerScroll 32s linear infinite; will-change: transform; white-space: nowrap; }
+        @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+        .card-reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.55s ease, transform 0.55s ease; }
+        .card-reveal.visible { opacity: 1; transform: translateY(0); }
       `}</style>
     </div>
   );
