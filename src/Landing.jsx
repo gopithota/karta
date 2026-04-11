@@ -273,7 +273,7 @@ export default function Landing() {
               onMouseEnter={e => { e.currentTarget.style.color = S.text; e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)"; }}
               onMouseLeave={e => { e.currentTarget.style.color = S.muted; e.currentTarget.style.borderColor = S.border; }}
             >GitHub</a>
-            <a href="https://buymeacoffee.com" target="_blank" rel="noreferrer"
+            <a href="https://buymeacoffee.com/karta" target="_blank" rel="noreferrer"
               style={{ padding: "5px 14px", borderRadius: 8, border: "1px solid rgba(255,214,0,0.18)", color: "#fde68a", fontSize: 12, textDecoration: "none", transition: "all 0.2s" }}
               onMouseEnter={e => e.currentTarget.style.background = "rgba(255,214,0,0.08)"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
@@ -349,7 +349,7 @@ export default function Landing() {
             onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 12px 56px rgba(74,222,128,0.3)"; }}
             onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 0 48px rgba(74,222,128,0.2)"; }}
           >Open your map →</a>
-          <a href="https://buymeacoffee.com" target="_blank" rel="noreferrer" style={{
+          <a href="https://buymeacoffee.com/karta" target="_blank" rel="noreferrer" style={{
             padding: "15px 28px", borderRadius: 10,
             border: "1px solid rgba(255,214,0,0.18)", background: "rgba(255,214,0,0.04)",
             color: "#fde68a", fontSize: 15, fontWeight: 600, textDecoration: "none", transition: "all 0.2s",
@@ -536,7 +536,7 @@ export default function Landing() {
               onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
               onMouseLeave={e => e.currentTarget.style.transform = ""}
             >Open Karta →</a>
-            <a href="https://buymeacoffee.com" target="_blank" rel="noreferrer" style={{ padding: "14px 28px", borderRadius: 10, border: "1px solid rgba(255,214,0,0.18)", background: "rgba(255,214,0,0.04)", color: "#fde68a", fontSize: 15, fontWeight: 600, textDecoration: "none", transition: "all 0.2s" }}
+            <a href="https://buymeacoffee.com/karta" target="_blank" rel="noreferrer" style={{ padding: "14px 28px", borderRadius: 10, border: "1px solid rgba(255,214,0,0.18)", background: "rgba(255,214,0,0.04)", color: "#fde68a", fontSize: 15, fontWeight: 600, textDecoration: "none", transition: "all 0.2s" }}
               onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,214,0,0.1)"; e.currentTarget.style.borderColor = "rgba(255,214,0,0.35)"; }}
               onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,214,0,0.04)"; e.currentTarget.style.borderColor = "rgba(255,214,0,0.18)"; }}
             >☕ Buy me a coffee</a>
@@ -552,7 +552,7 @@ export default function Landing() {
           <span style={{ color: S.muted, fontSize: 12 }}>— free & open source</span>
         </div>
         <div style={{ display: "flex", gap: 20 }}>
-          {[["GitHub","https://github.com/gopithota/karta"],["Finnhub","https://finnhub.io"],["Buy me a coffee","https://buymeacoffee.com"]].map(([label, href]) => (
+          {[["GitHub","https://github.com/gopithota/karta"],["Finnhub","https://finnhub.io"],["Buy me a coffee","https://buymeacoffee.com/karta"]].map(([label, href]) => (
             <a key={label} href={href} target="_blank" rel="noreferrer"
               style={{ fontSize: 12, color: S.muted, textDecoration: "none", transition: "color 0.2s" }}
               onMouseEnter={e => e.currentTarget.style.color = S.text}
