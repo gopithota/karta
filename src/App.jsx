@@ -1,67 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-
-// ─── Squarified Treemap ────────────────────────────────────────────
-function computeTreemap(items, W, H) {
-  if (!items.length || W <= 0 || H <= 0) return [];
-  const total = items.reduce((s, i) => s + Math.max(i.weight, 0.001), 0);
-  const nodes = items
-    .map(i => ({ ...i, area: (Math.max(i.weight, 0.001) / total) * W * H }))
-    .sort((a, b) => b.area - a.area);
-  const result = [];
-
-  function worst(row, rowArea, axisLen) {
-    const sv = rowArea / axisLen;
-    let w = 0;
-    for (const n of row) { const ia = (n.area / rowArea) * axisLen; w = Math.max(w, Math.max(sv / ia, ia / sv)); }
-    return w;
-  }
-
-  function squarify(nodes, x, y, w, h) {
-    if (!nodes.length || w < 1 || h < 1) return;
-    if (nodes.length === 1) { result.push({ ...nodes[0], x, y, w, h }); return; }
-    const leftStrip = w >= h;
-    const axisLen = leftStrip ? h : w;
-    let row = [], rowArea = 0, nextIdx = 0;
-    while (nextIdx < nodes.length) {
-      const c = nodes[nextIdx];
-      const newRow = [...row, c], newArea = rowArea + c.area;
-      if (row.length === 0 || worst(newRow, newArea, axisLen) <= worst(row, rowArea, axisLen) + 0.001) {
-        row = newRow; rowArea = newArea; nextIdx++;
-      } else break;
-    }
-    if (!row.length) { row = [nodes[0]]; rowArea = nodes[0].area; nextIdx = 1; }
-    const sv = rowArea / axisLen;
-    let offset = 0;
-    for (const n of row) {
-      const ia = (n.area / rowArea) * axisLen;
-      if (leftStrip) result.push({ ...n, x, y: y + offset, w: sv, h: ia });
-      else result.push({ ...n, x: x + offset, y, w: ia, h: sv });
-      offset += ia;
-    }
-    const rem = nodes.slice(nextIdx);
-    if (rem.length) {
-      if (leftStrip) squarify(rem, x + sv, y, w - sv, h);
-      else squarify(rem, x, y + sv, w, h - sv);
-    }
-  }
-
-  squarify(nodes, 0, 0, W, H);
-  return result;
-}
-
-// ─── Color scale ──────────────────────────────────────────────────
-// Original max colors (deep red / deep green) preserved.
-// Grey zone narrowed to ±0.3% — outside that, color kicks in immediately.
-function perfColor(pct) {
-  if (pct === null || pct === undefined || isNaN(pct)) return "#1e293b";
-  if (Math.abs(pct) < 0.2) return "#334155"; // tiny grey band around zero only
-  const t = Math.max(-1, Math.min(1, pct / 10));
-  if (t < 0) {
-    const i = -t;
-    return `rgb(${Math.round(30 + 190 * i)},${Math.round(40 - 10 * i)},${Math.round(40 - 10 * i)})`;
-  }
-  return `rgb(${Math.round(25 - 5 * t)},${Math.round(100 + 110 * t)},${Math.round(25 - 5 * t)})`;
-}
+import { computeTreemap, perfColor, IS_DEMO, applySnapshot, applyEvent } from "./utils.js";
 
 const LEGEND_STOPS = [-10, -7, -4, -2, -1, 0, 1, 2, 4, 7, 10];
 
@@ -91,15 +29,214 @@ const DEFAULT_PORTFOLIO = [
 
 const RL_WINDOW = 900; // must match api/finnhub.js
 
-const IS_DEMO = (key) => {
-  // True if the user has never saved their own portfolio
-  const saved = localStorage.getItem(key);
-  if (!saved) return true;
-  try {
-    const parsed = JSON.parse(saved);
-    return !parsed || parsed.length === 0;
-  } catch { return true; }
-};
+// ─── History Chart ────────────────────────────────────────────────
+function HistoryChart({ history, events }) {
+  const [hover, setHover] = useState(null);       // index of hovered line point
+  const [hovEvent, setHovEvent] = useState(null); // hovered event marker object
+  const hovEventRef = useRef(null);               // sync ref so handleMouseMove can read it
+  const svgRef = useRef(null);
+
+  const fmtVal = (v) => {
+    if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
+    if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
+    return `$${v.toFixed(0)}`;
+  };
+  const fmtDate = (d) =>
+    new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  const setHovEventSync = (v) => { hovEventRef.current = v; setHovEvent(v); };
+
+  if (history.length === 0) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: "60px 20px", color: "#64748b", textAlign: "center" }}>
+        <div style={{ fontSize: 40 }}>📈</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#94a3b8" }}>No history yet</div>
+        <div style={{ fontSize: 13, maxWidth: 340, lineHeight: 1.6 }}>
+          Portfolio value is recorded each weekday after a refresh. Hit Refresh on a market day to start tracking.
+        </div>
+      </div>
+    );
+  }
+
+  const W = 800, H = 260;
+  const PAD = { top: 24, right: 24, bottom: 44, left: 78 };
+  const cW = W - PAD.left - PAD.right;
+  const cH = H - PAD.top - PAD.bottom;
+
+  const vals = history.map(h => h.value);
+  const rawMin = Math.min(...vals), rawMax = Math.max(...vals);
+  const pad = (rawMax - rawMin) * 0.12 || rawMax * 0.05 || 1000;
+  const minVal = rawMin - pad, maxVal = rawMax + pad;
+  const valRange = maxVal - minVal;
+
+  const xScale = (i) => PAD.left + (history.length <= 1 ? cW / 2 : (i / (history.length - 1)) * cW);
+  const yScale = (v) => PAD.top + cH - ((v - minVal) / valRange) * cH;
+
+  const pts = history.map((h, i) => ({ x: xScale(i), y: yScale(h.value) }));
+  const linePath = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const yTicks = Array.from({ length: 5 }, (_, i) => minVal + (i / 4) * valRange);
+
+  const xLabels = [];
+  if (history.length <= 6) {
+    history.forEach((h, i) => xLabels.push({ i, label: fmtDate(h.date) }));
+  } else {
+    let prevMonth = null;
+    history.forEach((h, i) => {
+      const m = h.date.slice(0, 7);
+      if (m !== prevMonth) { xLabels.push({ i, label: fmtDate(h.date) }); prevMonth = m; }
+    });
+  }
+
+  const eventMarkers = [];
+  const seenEvtDates = new Set();
+  events.forEach(ev => {
+    if (seenEvtDates.has(ev.date)) return;
+    seenEvtDates.add(ev.date);
+    let nearestIdx = 0, nearestDiff = Infinity;
+    history.forEach((h, i) => {
+      const diff = Math.abs(new Date(h.date + "T12:00:00") - new Date(ev.date + "T12:00:00"));
+      if (diff < nearestDiff) { nearestDiff = diff; nearestIdx = i; }
+    });
+    const dateEvts = events.filter(e => e.date === ev.date);
+    const hasAdd = dateEvts.some(e => e.type === "add" || e.type === "update");
+    const hasRemove = dateEvts.some(e => e.type === "remove");
+    const color = hasAdd && hasRemove ? "#facc15" : hasRemove ? "#f87171" : "#4ade80";
+    eventMarkers.push({ date: ev.date, evts: dateEvts, x: xScale(nearestIdx), color });
+  });
+
+  // Only track the line hover when not over an event bubble
+  const handleMouseMove = (e) => {
+    if (!svgRef.current || history.length === 0 || hovEventRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) / rect.width * W;
+    let closest = 0, closestDist = Infinity;
+    pts.forEach((p, i) => { const d = Math.abs(p.x - mx); if (d < closestDist) { closestDist = d; closest = i; } });
+    setHover(closest);
+  };
+
+  const hovPt = hover != null && !hovEvent ? pts[hover] : null;
+  const hovH  = hover != null && !hovEvent ? history[hover] : null;
+  const trend = vals.length >= 2 ? vals[vals.length - 1] - vals[0] : 0;
+  const lineColor = trend >= 0 ? "#4ade80" : "#f87171";
+
+  return (
+    <div style={{ position: "relative", width: "100%" }}>
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ width: "100%", height: "auto", display: "block" }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => { setHover(null); setHovEventSync(null); }}
+      >
+        <defs>
+          <linearGradient id="histAreaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lineColor} stopOpacity={0.18} />
+            <stop offset="100%" stopColor={lineColor} stopOpacity={0.01} />
+          </linearGradient>
+        </defs>
+        {yTicks.map((v, i) => {
+          const y = yScale(v);
+          return (
+            <g key={i}>
+              <line x1={PAD.left} x2={W - PAD.right} y1={y} y2={y} stroke="#1c2536" strokeWidth={1} />
+              <text x={PAD.left - 8} y={y} textAnchor="end" dominantBaseline="middle" fill="#475569" fontSize={10}>{fmtVal(v)}</text>
+            </g>
+          );
+        })}
+        {xLabels.map(({ i, label }) => (
+          <text key={i} x={xScale(i)} y={H - 6} textAnchor="middle" fill="#475569" fontSize={10}>{label}</text>
+        ))}
+        {/* Event marker lines + bubbles — intercept mouse so line hover stays off */}
+        {eventMarkers.map((em) => (
+          <g
+            key={em.date}
+            onMouseEnter={() => { setHover(null); setHovEventSync(em); }}
+            onMouseLeave={() => setHovEventSync(null)}
+            onMouseMove={e => e.stopPropagation()}
+            style={{ cursor: "default" }}
+          >
+            <line x1={em.x} x2={em.x} y1={PAD.top} y2={PAD.top + cH} stroke={em.color} strokeWidth={1.5} strokeDasharray="4,3" opacity={0.65} />
+            {/* wider invisible hit area for easier targeting */}
+            <line x1={em.x} x2={em.x} y1={PAD.top} y2={PAD.top + cH} stroke="transparent" strokeWidth={14} />
+            <circle cx={em.x} cy={PAD.top + 2} r={5} fill={em.color} />
+          </g>
+        ))}
+        {history.length > 1 && (
+          <path
+            d={`${linePath} L${pts[pts.length - 1].x.toFixed(1)},${(PAD.top + cH).toFixed(1)} L${pts[0].x.toFixed(1)},${(PAD.top + cH).toFixed(1)} Z`}
+            fill="url(#histAreaGrad)"
+          />
+        )}
+        {history.length > 1 && (
+          <path d={linePath} fill="none" stroke={lineColor} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        )}
+        {history.length === 1 && <circle cx={pts[0].x} cy={pts[0].y} r={5} fill={lineColor} />}
+        {hovPt && (
+          <g>
+            <line x1={hovPt.x} x2={hovPt.x} y1={PAD.top} y2={PAD.top + cH} stroke="#334155" strokeWidth={1} strokeDasharray="3,3" />
+            <circle cx={hovPt.x} cy={hovPt.y} r={5} fill={lineColor} stroke="#0c0f18" strokeWidth={2} />
+          </g>
+        )}
+      </svg>
+
+      {/* Event bubble tooltip — shows portfolio changes only */}
+      {hovEvent && (() => {
+        const leftPct = (hovEvent.x / W) * 100;
+        return (
+          <div style={{
+            position: "absolute", top: "13%",
+            left: leftPct > 65 ? "auto" : `${leftPct}%`,
+            right: leftPct > 65 ? `${100 - leftPct}%` : "auto",
+            transform: leftPct <= 65 ? "translateX(-50%)" : "none",
+            background: "#0e1420", border: `1px solid ${hovEvent.color}44`,
+            borderRadius: 8, padding: "8px 12px", pointerEvents: "none", zIndex: 10, minWidth: 148,
+          }}>
+            <div style={{ fontSize: 11, color: "#64748b", marginBottom: 5 }}>
+              {new Date(hovEvent.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+            </div>
+            {hovEvent.evts.map((ev, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 5, fontSize: 12, fontWeight: 600,
+                color: ev.type === "add" ? "#4ade80" : ev.type === "remove" ? "#f87171" : "#93c5fd",
+                lineHeight: 1.7 }}>
+                <span style={{ fontWeight: 800 }}>{ev.type === "add" ? "+" : ev.type === "remove" ? "−" : "~"}</span>
+                <span>{ev.ticker}</span>
+                <span style={{ color: "#64748b", fontWeight: 400 }}>
+                  {ev.type === "update" ? `${ev.prevShares} → ${ev.shares}sh` : `${ev.shares}sh`}
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
+      {/* Line tooltip — shows value + daily % change only, no events */}
+      {hovH && hovPt && (() => {
+        const leftPct = (hovPt.x / W) * 100;
+        return (
+          <div style={{
+            position: "absolute", top: 8,
+            left: leftPct > 65 ? "auto" : `${leftPct}%`,
+            right: leftPct > 65 ? `${100 - leftPct}%` : "auto",
+            transform: leftPct <= 65 ? "translateX(-50%)" : "none",
+            background: "#1e293b", border: "1px solid #1c2536", borderRadius: 8,
+            padding: "8px 12px", pointerEvents: "none", zIndex: 10, minWidth: 148,
+          }}>
+            <div style={{ fontSize: 11, color: "#64748b", marginBottom: 2 }}>
+              {new Date(hovH.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: "#e2e8f0" }}>{fmtVal(hovH.value)}</div>
+            {hovH.change != null && (
+              <div style={{ fontSize: 12, fontWeight: 700, color: hovH.change >= 0 ? "#4ade80" : "#f87171" }}>
+                {hovH.change >= 0 ? "▲" : "▼"} {Math.abs(hovH.change).toFixed(2)}% today
+              </div>
+            )}
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
 
 const S = {
   bg: "#0c0f18", panel: "#131825", border: "#1c2536",
@@ -131,6 +268,14 @@ export default function App() {
   const [isDemo, setIsDemo] = useState(() => IS_DEMO("ph_portfolio"));
   const [rateLimitSecs, setRateLimitSecs] = useState(0);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
+  const [history, setHistory] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ph_history")) || []; }
+    catch { return []; }
+  });
+  const [portfolioEvents, setPortfolioEvents] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ph_events")) || []; }
+    catch { return []; }
+  });
   const containerRef = useRef(null);
   const [boxSize, setBoxSize] = useState({ w: 700, h: 460 });
 
@@ -178,6 +323,7 @@ export default function App() {
   const fetchData = useCallback(async (key = apiKey, force = false) => {
     if (!portfolio.length) return;
     const useShared = !key;
+    const collected = {}; // accumulate locally to compute snapshot after loop
 
     // Pre-flight rate-limit check — one POST before the loop, not per ticker
     if (useShared && force) {
@@ -262,6 +408,7 @@ export default function App() {
           "1y":  ret(c1y, ts["1y"]),
           "5y":  ret(c5y, ts["5y"]),
         };
+        collected[ticker] = entry;
         setStockData(prev => ({ ...prev, [ticker]: entry }));
       } catch (e) {
         if (!useShared) {
@@ -273,11 +420,26 @@ export default function App() {
       if (!useShared && i < portfolio.length - 1) await sleep(220);
     }
 
+    // Snapshot: compute total value + weighted daily % from collected data
+    {
+      let totalVal = 0, wRet = 0, wSum = 0;
+      for (const { ticker, shares } of portfolio) {
+        const d = collected[ticker];
+        if (d?.price) {
+          const val = d.price * shares;
+          totalVal += val;
+          if (d.today != null) { wRet += d.today * val; wSum += val; }
+        }
+      }
+      const change = wSum > 0 ? wRet / wSum : null;
+      recordDailySnapshot(totalVal, change);
+    }
+
     if (!silent) {
       setFetchErrors(errs);
       setLoading(false);
     }
-  }, [apiKey, portfolio]);
+  }, [apiKey, portfolio, isDemo]); // recordDailySnapshot omitted — declared after fetchData, dep on isDemo covers it
 
   const getWeight = useCallback((ticker) => {
     const d = stockData[ticker];
@@ -321,12 +483,85 @@ export default function App() {
     return wSum > 0 ? wRet / wSum : null;
   }, [stockData, portfolio]);
 
+  // Record one entry per weekday after a successful fetch (overwrites same-day entry)
+  const recordDailySnapshot = useCallback((value, change) => {
+    if (isDemo || value <= 0) return;
+    const today = new Date();
+    const dow = today.getDay();
+    if (dow === 0 || dow === 6) return; // skip weekends
+    const dateStr = today.toISOString().split("T")[0];
+    setHistory(prev => {
+      const next = applySnapshot(prev, dateStr, value, change);
+      localStorage.setItem("ph_history", JSON.stringify(next));
+      return next;
+    });
+  }, [isDemo]);
+
+  // Seed realistic demo history + events for visual testing
+  const seedDemoHistory = useCallback(() => {
+    const demoHistory = [];
+    const demoEvents = [];
+    let value = 68400;
+    const today = new Date();
+    // Walk back 60 calendar days, collect ~42 weekday entries
+    for (let daysBack = 59; daysBack >= 0; daysBack--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - daysBack);
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue; // skip weekends
+      const dateStr = d.toISOString().split("T")[0];
+      // Simulate daily drift: slight upward bias + noise
+      const dailyChange = (Math.random() - 0.44) * 3.2;
+      value = value * (1 + dailyChange / 100);
+      demoHistory.push({ date: dateStr, value: Math.round(value * 100) / 100, change: +dailyChange.toFixed(2) });
+    }
+    // Scatter 6 portfolio events on random weekdays
+    const eventDefs = [
+      { type: "add",    ticker: "NVDA",  shares: 5  },
+      { type: "add",    ticker: "MSFT",  shares: 10 },
+      { type: "remove", ticker: "XOM",   shares: 20 },
+      { type: "update", ticker: "AAPL",  shares: 15, prevShares: 8 },
+      { type: "add",    ticker: "META",  shares: 3  },
+      { type: "remove", ticker: "F",     shares: 50 },
+    ];
+    const weekdays = demoHistory.map(h => h.date);
+    // Space events evenly across the weekdays
+    const step = Math.floor(weekdays.length / (eventDefs.length + 1));
+    eventDefs.forEach((ev, i) => {
+      const date = weekdays[step * (i + 1)];
+      if (!date) return;
+      demoEvents.push({ date, time: "10:32:00", ...ev });
+    });
+    setHistory(demoHistory);
+    setPortfolioEvents(demoEvents);
+    localStorage.setItem("ph_history", JSON.stringify(demoHistory));
+    localStorage.setItem("ph_events",  JSON.stringify(demoEvents));
+  }, []);
+
+  // Record a portfolio change event (add / remove / update)
+  const recordPortfolioEvent = useCallback((type, ticker, shares, prevShares = null) => {
+    if (isDemo) return;
+    const now = new Date();
+    const event = {
+      date: now.toISOString().split("T")[0],
+      time: now.toTimeString().split(" ")[0],
+      type, ticker, shares,
+      ...(prevShares != null ? { prevShares } : {}),
+    };
+    setPortfolioEvents(prev => {
+      const next = applyEvent(prev, event);
+      localStorage.setItem("ph_events", JSON.stringify(next));
+      return next;
+    });
+  }, [isDemo]);
+
   const addStock = () => {
     const t = newTicker.trim().toUpperCase();
     const s = parseFloat(newShares);
     if (!t || isNaN(s) || s <= 0 || portfolio.find(p => p.ticker === t)) return;
     setPortfolio([...portfolio, { ticker: t, shares: s }]);
     setNewTicker(""); setNewShares("10");
+    recordPortfolioEvent("add", t, s);
   };
 
   const parseBulk = () => {
@@ -346,12 +581,20 @@ export default function App() {
     if (errors.length) { setBulkError(errors.join(" · ")); return; }
     if (!parsed.length) { setBulkError("Nothing to import — check the format."); return; }
     const merged = [...portfolio];
+    const eventsToRecord = [];
     for (const p of parsed) {
       const idx = merged.findIndex(m => m.ticker === p.ticker);
-      if (idx >= 0) merged[idx] = p; else merged.push(p);
+      if (idx >= 0) {
+        if (merged[idx].shares !== p.shares) eventsToRecord.push({ type: "update", ticker: p.ticker, shares: p.shares, prevShares: merged[idx].shares });
+        merged[idx] = p;
+      } else {
+        merged.push(p);
+        eventsToRecord.push({ type: "add", ticker: p.ticker, shares: p.shares });
+      }
     }
     setPortfolio(merged);
     setBulkText("");
+    eventsToRecord.forEach(e => recordPortfolioEvent(e.type, e.ticker, e.shares, e.prevShares ?? null));
   };
 
   const btnBase = (active) => ({
@@ -454,16 +697,21 @@ export default function App() {
               🔒 Local only
             </div>
           )}
-          {["heatmap", "table", "setup"].map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ ...btnBase(tab === t), textTransform: "capitalize", padding: isMobile ? "5px 9px" : "5px 13px", fontSize: isMobile ? 12 : 13 }}>
-              {isMobile ? (t === "heatmap" ? "Map" : t) : t}
+          {[
+            { key: "heatmap",  label: "Heatmap",  short: "Map"  },
+            { key: "table",    label: "Table",     short: "Table" },
+            { key: "history",  label: "History",   short: "Hist" },
+            { key: "setup",    label: "Setup",     short: "Setup" },
+          ].map(({ key, label, short }) => (
+            <button key={key} onClick={() => setTab(key)} style={{ ...btnBase(tab === key), textTransform: "capitalize", padding: isMobile ? "5px 9px" : "5px 13px", fontSize: isMobile ? 12 : 13 }}>
+              {isMobile ? short : label}
             </button>
           ))}
         </div>
       </div>
 
       {/* Toolbar */}
-      {tab !== "setup" && (
+      {tab !== "setup" && tab !== "history" && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderBottom: `1px solid ${S.border}`, flexShrink: 0 }}>
           <div style={{ flex: 1 }} />
           {Object.keys(fetchErrors).length > 0 && (
@@ -482,7 +730,7 @@ export default function App() {
       )}
 
       {/* Shared-key nudge — visible when user hasn't set their own API key */}
-      {!apiKey && tab !== "setup" && (
+      {!apiKey && tab !== "setup" && tab !== "history" && (
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
           padding: "5px 18px", flexShrink: 0,
@@ -671,6 +919,105 @@ export default function App() {
           )}
         </div>
 
+        {/* ━━━ HISTORY ━━━ */}
+        <div style={{ position: "absolute", inset: 0, overflow: "auto", display: tab === "history" ? "block" : "none", padding: 20 }}>
+          <div style={{ maxWidth: 860, margin: "0 auto" }}>
+
+            {/* Summary stat cards */}
+            {history.length >= 2 && (() => {
+              const first = history[0], last = history[history.length - 1];
+              const totalChange = ((last.value - first.value) / first.value) * 100;
+              return (
+                <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+                  {[
+                    { label: "Current Value", value: `$${last.value.toLocaleString("en-US", { maximumFractionDigits: 0 })}` },
+                    { label: "Since First Record", value: `${totalChange >= 0 ? "+" : ""}${totalChange.toFixed(2)}%`, color: totalChange >= 0 ? "#4ade80" : "#f87171" },
+                    { label: "Tracking Since", value: new Date(first.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) },
+                    { label: "Days Recorded", value: `${history.length}` },
+                  ].map(s => (
+                    <div key={s.label} style={{ background: S.panel, borderRadius: 8, border: `1px solid ${S.border}`, padding: "10px 16px", flex: "1 1 140px" }}>
+                      <div style={{ fontSize: 11, color: S.muted, marginBottom: 4 }}>{s.label}</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: s.color || S.text }}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Chart card */}
+            <div style={{ background: S.panel, borderRadius: 10, border: `1px solid ${S.border}`, padding: "16px 4px 8px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 12px", flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: S.text }}>Portfolio Value — 1 Year</div>
+                  {history.length === 0 && (
+                    <button
+                      onClick={seedDemoHistory}
+                      style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 5, border: "1px solid rgba(250,204,21,0.3)", background: "rgba(250,204,21,0.08)", color: "#fde68a", cursor: "pointer" }}
+                    >Load demo data</button>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 14, fontSize: 11, color: S.muted }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />Added
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#f87171", display: "inline-block" }} />Removed
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#facc15", display: "inline-block" }} />Mixed
+                  </span>
+                </div>
+              </div>
+              <HistoryChart history={history} events={portfolioEvents} />
+            </div>
+
+            {/* Portfolio changes list */}
+            {portfolioEvents.length > 0 && (
+              <div style={{ background: S.panel, borderRadius: 10, border: `1px solid ${S.border}`, marginTop: 16, overflow: "hidden" }}>
+                <div style={{ padding: "12px 16px", borderBottom: `1px solid ${S.border}`, fontSize: 13, fontWeight: 700, color: S.text }}>
+                  Portfolio Changes ({portfolioEvents.length})
+                </div>
+                <div style={{ maxHeight: 260, overflowY: "auto" }}>
+                  {[...portfolioEvents].reverse().map((ev, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", borderBottom: `1px solid #0f1520` }}>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: ev.type === "add" ? "#4ade80" : ev.type === "remove" ? "#f87171" : "#93c5fd", minWidth: 14 }}>
+                        {ev.type === "add" ? "+" : ev.type === "remove" ? "−" : "~"}
+                      </span>
+                      <span style={{ fontWeight: 700, fontSize: 13, minWidth: 56 }}>{ev.ticker}</span>
+                      <span style={{ fontSize: 12, color: S.muted }}>
+                        {ev.type === "add"    ? `Added ${ev.shares} shares`
+                          : ev.type === "remove" ? `Removed ${ev.shares} shares`
+                          : `Updated: ${ev.prevShares} → ${ev.shares} shares`}
+                      </span>
+                      <span style={{ marginLeft: "auto", fontSize: 11, color: "#334155", whiteSpace: "nowrap" }}>
+                        {new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Clear history */}
+            {(history.length > 0 || portfolioEvents.length > 0) && (
+              <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => {
+                    setHistory([]);
+                    setPortfolioEvents([]);
+                    localStorage.removeItem("ph_history");
+                    localStorage.removeItem("ph_events");
+                  }}
+                  style={{ fontSize: 12, color: "#475569", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                >
+                  Clear all history data
+                </button>
+              </div>
+            )}
+
+          </div>
+        </div>
+
         {/* ━━━ SETUP ━━━ */}
         <div style={{ position: "absolute", inset: 0, overflow: "auto", display: tab === "setup" ? "block" : "none", padding: 20 }}>
           <div style={{ maxWidth: 620, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -815,7 +1162,7 @@ export default function App() {
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: S.muted, letterSpacing: "0.04em" }}>HOLDINGS ({portfolio.length})</div>
                     {portfolio.length > 0 && (
-                      <button onClick={() => setPortfolio([])} style={{ fontSize: 12, color: "#f87171", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Clear all</button>
+                      <button onClick={() => { portfolio.forEach(({ ticker, shares }) => recordPortfolioEvent("remove", ticker, shares)); setPortfolio([]); }} style={{ fontSize: 12, color: "#f87171", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Clear all</button>
                     )}
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
@@ -823,7 +1170,7 @@ export default function App() {
                       <div key={ticker} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6, background: S.bg, border: `1px solid ${S.border}` }}>
                         <span style={{ fontWeight: 800, fontSize: 13 }}>{ticker}</span>
                         <span style={{ fontSize: 11, color: S.muted }}>{shares}sh</span>
-                        <button onClick={() => setPortfolio(portfolio.filter(p => p.ticker !== ticker))} style={{ background: "none", border: "none", cursor: "pointer", color: "#475569", fontSize: 15, padding: 0, lineHeight: 1 }}>×</button>
+                        <button onClick={() => { recordPortfolioEvent("remove", ticker, shares); setPortfolio(portfolio.filter(p => p.ticker !== ticker)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#475569", fontSize: 15, padding: 0, lineHeight: 1 }}>×</button>
                       </div>
                     ))}
                     {!portfolio.length && <span style={{ fontSize: 13, color: "#334155" }}>No stocks added yet — use bulk import or add one above.</span>}
