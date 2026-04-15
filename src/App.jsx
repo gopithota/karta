@@ -261,7 +261,7 @@ export default function App() {
   const [fetchErrors,  setFetchErrors]  = useState({});
   const [tab,          setTab]          = useState("heatmap");
   const [tooltip,      setTooltip]      = useState(null);
-  const [privacyMode,  setPrivacyMode]  = useState(false);
+  const [privacyMode,  setPrivacyMode]  = useState(true);
   const [showPrivacyNotice, setShowPrivacyNotice] = useState(
     () => !localStorage.getItem("ph_privacy_seen")
   );

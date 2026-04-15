@@ -1,5 +1,13 @@
 # Karta — Changelog
 
+## v0.3.1 — 2026-04-15
+
+### Patch
+
+- Portfolio value now hidden by default on load (privacy mode on by default)
+
+---
+
 ## v0.3.0 — 2026-04-15
 
 ### Portfolio History & Test Suite
