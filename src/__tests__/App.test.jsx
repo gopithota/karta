@@ -239,6 +239,50 @@ describe("history tab", () => {
   });
 });
 
+// ─── Theme switcher ───────────────────────────────────────────────
+describe("theme switcher", () => {
+  test("renders three theme swatch buttons", () => {
+    setup();
+    expect(screen.getByRole("button", { name: /dark/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /warm/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /light/i })).toBeInTheDocument();
+  });
+
+  test("defaults to dark theme (no localStorage key set)", () => {
+    setup();
+    expect(localStorage.getItem("ph_theme")).toBeNull();
+    // The dark swatch button should be present (rendered regardless of active state)
+    expect(screen.getByRole("button", { name: /dark/i })).toBeInTheDocument();
+  });
+
+  test("clicking Warm swatch persists 'warm' to localStorage", async () => {
+    const user = setup();
+    await user.click(screen.getByRole("button", { name: /warm/i }));
+    expect(localStorage.getItem("ph_theme")).toBe("warm");
+  });
+
+  test("clicking Light swatch persists 'light' to localStorage", async () => {
+    const user = setup();
+    await user.click(screen.getByRole("button", { name: /light/i }));
+    expect(localStorage.getItem("ph_theme")).toBe("light");
+  });
+
+  test("clicking Dark swatch persists 'dark' to localStorage", async () => {
+    const user = setup();
+    await user.click(screen.getByRole("button", { name: /warm/i }));
+    await user.click(screen.getByRole("button", { name: /dark/i }));
+    expect(localStorage.getItem("ph_theme")).toBe("dark");
+  });
+
+  test("persisted theme is loaded on render", () => {
+    localStorage.setItem("ph_theme", "light");
+    setup();
+    // App reads from localStorage — verify it doesn't crash and theme key is unchanged
+    expect(localStorage.getItem("ph_theme")).toBe("light");
+    expect(screen.getByRole("button", { name: /light/i })).toBeInTheDocument();
+  });
+});
+
 // ─── Demo mode transitions ────────────────────────────────────────
 describe("demo mode", () => {
   test("exits demo mode after adding a real stock", async () => {

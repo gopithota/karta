@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { THEMES, SWATCHES, useTheme } from "./theme.js";
 
 // ── Karta logo — geometric heatmap grid mark ──────────────────────
 function KartaLogo({ size = 36 }) {
   const cells = [
-    ["#1a4731","#1e5c3e","#2d7a52"],
-    ["#1e5c3e","#2d7a52","#3a9966"],
-    ["#2d7a52","#3a9966","#4ade80"],
-    ["#1a3a28","#2d7a52","#22c55e"],
+    ["#2a6040","#3a7a52","#4a9966"],
+    ["#3a7a52","#4a9966","#5ab878"],
+    ["#4a9966","#5ab878","#4ade80"],
+    ["#235238","#4a9966","#22c55e"],
   ];
   const cell = size / 4.2;
   const gap  = cell * 0.18;
@@ -17,7 +18,6 @@ function KartaLogo({ size = 36 }) {
   const oy = (size - totalH) / 2;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
-      <rect width={size} height={size} rx={size * 0.22} fill="#0a1a12" />
       {cells.map((row, ri) =>
         row.map((fill, ci) => (
           <rect key={`${ri}-${ci}`}
@@ -57,7 +57,6 @@ function DemoHeatmap() {
     }, 1400);
     return () => clearInterval(id);
   }, []);
-  const total = tiles.reduce((s, t) => s + t.w, 0);
   return (
     <div style={{ display: "flex", flexWrap: "wrap", width: "100%", height: "100%", gap: 3, padding: 3, boxSizing: "border-box" }}>
       {tiles.map(tile => (
@@ -78,8 +77,8 @@ function DemoHeatmap() {
 }
 
 // ── Live visitor counter ──────────────────────────────────────────
-function UserCounter() {
-  const [count, setCount]     = useState(null);
+function UserCounter({ S }) {
+  const [count, setCount]       = useState(null);
   const [animated, setAnimated] = useState(0);
   const posted = useRef(false);
 
@@ -117,48 +116,50 @@ function UserCounter() {
       }}>
         {count === null ? "—" : animated.toLocaleString()}
       </div>
-      <div style={{ fontSize: 11, color: "#475569", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.06em" }}>
+      <div style={{ fontSize: 11, color: S.muted, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.06em" }}>
         INVESTORS USING KARTA
       </div>
     </div>
   );
 }
 
-function Stat({ value, label }) {
+function Stat({ value, label, S }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-      <div style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: "clamp(36px, 5vw, 56px)", fontWeight: 400, letterSpacing: "-0.03em", color: "#f1f5f9", lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 11, color: "#475569", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.06em" }}>{label}</div>
+      <div style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: "clamp(36px, 5vw, 56px)", fontWeight: 400, letterSpacing: "-0.03em", color: S.text, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 11, color: S.muted, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.06em" }}>{label}</div>
     </div>
   );
 }
 
-function Feature({ icon, title, desc }) {
+function Feature({ icon, title, desc, S }) {
+  const borderDefault = S.border;
   return (
-    <div style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "26px 22px", display: "flex", flexDirection: "column", gap: 10, transition: "border-color 0.2s, transform 0.2s" }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(74,222,128,0.25)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)"; e.currentTarget.style.transform = ""; }}
+    <div
+      style={{ background: S.featureCard, border: `1px solid ${borderDefault}`, borderRadius: 14, padding: "26px 22px", display: "flex", flexDirection: "column", gap: 10, transition: "border-color 0.2s, transform 0.2s, box-shadow 0.2s" }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(74,222,128,0.4)"; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.08)"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = borderDefault; e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "none"; }}
     >
       <div style={{ fontSize: 24 }}>{icon}</div>
-      <div style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 17, color: "#f1f5f9", lineHeight: 1.3 }}>{title}</div>
-      <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.65 }}>{desc}</div>
+      <div style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 17, color: S.text, lineHeight: 1.3 }}>{title}</div>
+      <div style={{ fontSize: 13, color: S.muted, lineHeight: 1.65 }}>{desc}</div>
     </div>
   );
 }
 
-function Step({ n, title, desc }) {
+function Step({ n, title, desc, S }) {
   return (
     <div style={{ display: "flex", gap: 18, alignItems: "flex-start" }}>
       <div style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0, background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.22)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "#4ade80" }}>{n}</div>
       <div>
-        <div style={{ fontWeight: 700, fontSize: 14, color: "#e2e8f0", marginBottom: 4 }}>{title}</div>
-        <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.65 }}>{desc}</div>
+        <div style={{ fontWeight: 700, fontSize: 14, color: S.strong, marginBottom: 4 }}>{title}</div>
+        <div style={{ fontSize: 13, color: S.muted, lineHeight: 1.65 }}>{desc}</div>
       </div>
     </div>
   );
 }
 
-// ── Ticker tape data ─────────────────────────────────────────────
+// ── Ticker tape ───────────────────────────────────────────────────
 const TICKER_ITEMS = [
   { sym: "AAPL", chg: +1.24 }, { sym: "NVDA", chg: +8.40 },
   { sym: "TSLA", chg: -5.20 }, { sym: "MSFT", chg: +0.87 },
@@ -170,18 +171,18 @@ const TICKER_ITEMS = [
   { sym: "GS",   chg: +1.03 }, { sym: "SPY",  chg: +0.61 },
 ];
 
-function TickerTape() {
+function TickerTape({ S }) {
   const items = [...TICKER_ITEMS, ...TICKER_ITEMS];
   return (
     <div className="ticker-wrap">
       <div className="ticker-track">
         {items.map((item, i) => (
           <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 16px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
-            <span style={{ color: "#94a3b8", fontWeight: 700 }}>{item.sym}</span>
+            <span style={{ color: S.code, fontWeight: 700 }}>{item.sym}</span>
             <span style={{ color: item.chg >= 0 ? "#4ade80" : "#f87171", fontWeight: 600 }}>
               {item.chg >= 0 ? "+" : ""}{item.chg.toFixed(2)}%
             </span>
-            <span style={{ color: "#1e2d3d" }}>·</span>
+            <span style={{ color: S.subtext }}>·</span>
           </span>
         ))}
       </div>
@@ -213,9 +214,21 @@ function useScrollReveal(count) {
 
 // ── Main ──────────────────────────────────────────────────────────
 export default function Landing() {
+  const [theme, setTheme] = useTheme();
+  const S = THEMES[theme];
+
+  // Sync body background with theme
+  useEffect(() => { document.body.style.background = S.bg; }, [S.bg]);
+
   const [scrolled, setScrolled] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
   const [revealRefs, revealed] = useScrollReveal(5);
+
+  // Coffee button colors — yellow is invisible on light cream bg
+  const coffeeText   = theme === "light" ? "#b7840a" : "#fde68a";
+  const coffeeBorder = theme === "light" ? "rgba(180,130,0,0.30)" : "rgba(255,214,0,0.18)";
+  const coffeeHoverBg = theme === "light" ? "rgba(180,130,0,0.08)" : "rgba(255,214,0,0.08)";
+  const coffeeHoverBorder = theme === "light" ? "rgba(180,130,0,0.45)" : "rgba(255,214,0,0.35)";
 
   const floatingTiles = useMemo(() => [
     { left: "8%",  size: 28, dur: 14, delay: 0,   color: "rgba(74,222,128,0.12)" },
@@ -240,47 +253,69 @@ export default function Landing() {
     return () => window.removeEventListener("resize", fn);
   }, []);
 
-  const S = { bg: "#080b12", border: "rgba(255,255,255,0.07)", green: "#4ade80", muted: "#64748b", text: "#e2e8f0" };
+  // Shared 3-swatch theme picker
+  const ThemePicker = (
+    <div style={{ display: "flex", gap: 5, alignItems: "center", padding: "4px 8px", borderRadius: 20, border: `1px solid ${S.border}` }}>
+      {SWATCHES.map(t => (
+        <button
+          key={t.key}
+          onClick={() => setTheme(t.key)}
+          title={t.label}
+          style={{
+            width: 14, height: 14, borderRadius: "50%",
+            background: t.dot,
+            border: theme === t.key ? "2px solid #4ade80" : "2px solid transparent",
+            cursor: "pointer", padding: 0, outline: "none",
+            boxShadow: theme === t.key ? "0 0 0 1px rgba(74,222,128,0.4)" : "none",
+            transition: "box-shadow 0.15s",
+          }}
+        />
+      ))}
+    </div>
+  );
 
   return (
     <div style={{ background: S.bg, color: S.text, minHeight: "100vh", fontFamily: "'Inter', system-ui, sans-serif" }}>
 
-      {/* Grain */}
-      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0, opacity: 0.4,
-        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E")`,
-        backgroundSize: "128px" }} />
+      {/* Grain overlay — dark themes only */}
+      {S.grain && (
+        <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0, opacity: 0.4,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E")`,
+          backgroundSize: "128px" }} />
+      )}
 
-      {/* Glow */}
-      <div style={{ position: "fixed", top: "-25%", left: "50%", transform: "translateX(-50%)", width: "80vw", height: "65vh", background: "radial-gradient(ellipse, rgba(34,197,94,0.055) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
+      {/* Ambient glow */}
+      <div style={{ position: "fixed", top: "-25%", left: "50%", transform: "translateX(-50%)", width: "80vw", height: "65vh", background: `radial-gradient(ellipse, ${S.pageGlow} 0%, transparent 70%)`, pointerEvents: "none", zIndex: 0 }} />
 
       {/* ── Nav ── */}
       <nav style={{
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
         padding: isMobile ? "0 16px" : "0 32px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56,
-        background: scrolled ? "rgba(8,11,18,0.92)" : "transparent",
+        background: scrolled ? S.navBg : "transparent",
         backdropFilter: scrolled ? "blur(16px)" : "none",
         borderBottom: scrolled ? `1px solid ${S.border}` : "none",
         transition: "all 0.3s",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <KartaLogo size={28} />
-          <span style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 20, letterSpacing: "-0.01em" }}>Karta</span>
+          <span style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 20, letterSpacing: "-0.01em", color: S.text }}>Karta</span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {!isMobile && <>
             <a href="https://github.com/gopithota/karta" target="_blank" rel="noreferrer"
               style={{ padding: "5px 14px", borderRadius: 8, border: `1px solid ${S.border}`, color: S.muted, fontSize: 12, textDecoration: "none", transition: "all 0.2s" }}
-              onMouseEnter={e => { e.currentTarget.style.color = S.text; e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)"; }}
+              onMouseEnter={e => { e.currentTarget.style.color = S.text; e.currentTarget.style.borderColor = S.emphasis; }}
               onMouseLeave={e => { e.currentTarget.style.color = S.muted; e.currentTarget.style.borderColor = S.border; }}
             >GitHub</a>
             <a href="https://buymeacoffee.com/karta" target="_blank" rel="noreferrer"
-              style={{ padding: "5px 14px", borderRadius: 8, border: "1px solid rgba(255,214,0,0.18)", color: "#fde68a", fontSize: 12, textDecoration: "none", transition: "all 0.2s" }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,214,0,0.08)"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              style={{ padding: "5px 14px", borderRadius: 8, border: `1px solid ${coffeeBorder}`, color: coffeeText, fontSize: 12, textDecoration: "none", transition: "all 0.2s" }}
+              onMouseEnter={e => { e.currentTarget.style.background = coffeeHoverBg; e.currentTarget.style.borderColor = coffeeHoverBorder; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = coffeeBorder; }}
             >☕ Coffee</a>
           </>}
+          {ThemePicker}
           <a href="/app"
-            style={{ padding: "6px 18px", borderRadius: 8, background: S.green, color: "#051a0a", fontSize: 13, fontWeight: 800, textDecoration: "none", transition: "opacity 0.2s" }}
+            style={{ padding: "6px 18px", borderRadius: 8, background: "#4ade80", color: "#051a0a", fontSize: 13, fontWeight: 800, textDecoration: "none", transition: "opacity 0.2s" }}
             onMouseEnter={e => e.currentTarget.style.opacity = "0.82"}
             onMouseLeave={e => e.currentTarget.style.opacity = "1"}
           >Launch →</a>
@@ -307,7 +342,7 @@ export default function Landing() {
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 28 }}>
           <div style={{ position: "relative" }}>
             <KartaLogo size={80} />
-            <div style={{ position: "absolute", inset: -10, borderRadius: 28, background: "radial-gradient(ellipse, rgba(74,222,128,0.14) 0%, transparent 70%)", pointerEvents: "none" }} />
+            <div style={{ position: "absolute", inset: -10, borderRadius: 28, background: `radial-gradient(ellipse, ${S.logoGlow} 0%, transparent 70%)`, pointerEvents: "none" }} />
           </div>
         </div>
 
@@ -316,26 +351,26 @@ export default function Landing() {
           fontFamily: "'DM Serif Display', Georgia, serif",
           fontSize: "clamp(56px, 9vw, 96px)", fontWeight: 400, lineHeight: 0.92,
           letterSpacing: "-0.03em", margin: "0 0 18px",
-          background: "linear-gradient(160deg, #f8fafc 20%, #94a3b8 100%)",
-          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          backgroundImage: S.heroGrad,
+          WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", color: "transparent",
         }}>Karta</h1>
 
-        {/* Etymology */}
+        {/* Etymology badge */}
         <div style={{
           display: "inline-flex", alignItems: "center", gap: 8,
           padding: "7px 18px", borderRadius: 99, marginBottom: 32,
-          background: "rgba(255,255,255,0.035)", border: `1px solid ${S.border}`,
+          background: S.etymBg, border: `1px solid ${S.border}`,
           fontSize: 13, color: S.muted,
         }}>
-          <span style={{ color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontStyle: "italic" }}>kar·ta</span>
-          <span style={{ color: "#334155" }}>·</span>
-          <span>Swedish & Latin for <strong style={{ color: "#cbd5e1" }}>"map"</strong> — your portfolio, charted.</span>
+          <span style={{ color: S.code, fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontStyle: "italic" }}>kar·ta</span>
+          <span style={{ color: S.subtext }}>·</span>
+          <span>Swedish & Latin for <strong style={{ color: S.emphasis }}>"map"</strong> — your portfolio, charted.</span>
         </div>
 
         <p style={{ fontSize: 18, color: S.muted, lineHeight: 1.75, maxWidth: 500, margin: "0 auto 44px" }}>
           A Finviz-style heatmap for your personal portfolio.
           Color-coded performance, sized by your holdings.{" "}
-          <strong style={{ color: "#e2e8f0" }}>Free forever.</strong>
+          <strong style={{ color: S.strong }}>Free forever.</strong>
         </p>
 
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
@@ -351,53 +386,59 @@ export default function Landing() {
           >Open your map →</a>
           <a href="https://buymeacoffee.com/karta" target="_blank" rel="noreferrer" style={{
             padding: "15px 28px", borderRadius: 10,
-            border: "1px solid rgba(255,214,0,0.18)", background: "rgba(255,214,0,0.04)",
-            color: "#fde68a", fontSize: 15, fontWeight: 600, textDecoration: "none", transition: "all 0.2s",
+            border: `1px solid ${coffeeBorder}`, background: "transparent",
+            color: coffeeText, fontSize: 15, fontWeight: 600, textDecoration: "none", transition: "all 0.2s",
           }}
-            onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,214,0,0.1)"; e.currentTarget.style.borderColor = "rgba(255,214,0,0.35)"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,214,0,0.04)"; e.currentTarget.style.borderColor = "rgba(255,214,0,0.18)"; }}
+            onMouseEnter={e => { e.currentTarget.style.background = coffeeHoverBg; e.currentTarget.style.borderColor = coffeeHoverBorder; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = coffeeBorder; }}
           >☕ Buy me a coffee</a>
         </div>
 
         {/* Ticker tape */}
         <div style={{ position: "relative", zIndex: 1, marginTop: 36 }}>
-          <TickerTape />
+          <TickerTape S={S} />
         </div>
 
         {/* Demo window */}
-        <div style={{ marginTop: 28, background: "#0c0f18", border: `1px solid ${S.border}`, borderRadius: 16, overflow: "hidden", boxShadow: "0 48px 120px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04)" }}>
-          <div style={{ padding: "11px 16px", borderBottom: `1px solid ${S.border}`, display: "flex", alignItems: "center", gap: 10, background: "#09111e" }}>
+        <div style={{ marginTop: 28, background: S.demoWin, border: `1px solid ${S.border}`, borderRadius: 16, overflow: "hidden", boxShadow: theme === "light" ? "0 24px 80px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05)" : "0 48px 120px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04)" }}>
+          {/* Title bar */}
+          <div style={{ padding: "11px 16px", borderBottom: `1px solid ${S.border}`, display: "flex", alignItems: "center", gap: 10, background: S.demoBar }}>
             <div style={{ display: "flex", gap: 6 }}>
               {["#f87171","#fbbf24","#4ade80"].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: "50%", background: c, opacity: 0.6 }} />)}
             </div>
-            <div style={{ flex: 1, background: "rgba(255,255,255,0.05)", borderRadius: 5, height: 20, display: "flex", alignItems: "center", paddingLeft: 10, gap: 6 }}>
+            <div style={{ flex: 1, background: S.demoUrl, borderRadius: 5, height: 20, display: "flex", alignItems: "center", paddingLeft: 10, gap: 6 }}>
               <KartaLogo size={12} />
               <span style={{ fontSize: 10, color: S.muted, fontFamily: "'JetBrains Mono', monospace" }}>karta.app</span>
             </div>
           </div>
+          {/* App bar */}
           <div style={{ padding: "9px 16px", borderBottom: `1px solid ${S.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <KartaLogo size={18} />
-              <span style={{ fontWeight: 800, fontSize: 13, fontFamily: "'DM Serif Display', Georgia, serif" }}>My Portfolio</span>
+              <span style={{ fontWeight: 800, fontSize: 13, fontFamily: "'DM Serif Display', Georgia, serif", color: S.text }}>My Portfolio</span>
               <span style={{ fontSize: 12, color: "#4ade80", fontWeight: 700 }}>▲ 1.24%</span>
             </div>
             <div style={{ display: "flex", gap: 5 }}>
               {["heatmap","table","setup"].map(t => (
-                <div key={t} style={{ padding: "3px 9px", borderRadius: 5, fontSize: 10, color: t === "heatmap" ? "#93c5fd" : S.muted, background: t === "heatmap" ? "#1a3160" : "transparent", border: `1px solid ${t === "heatmap" ? "#3b82f6" : S.border}`, textTransform: "capitalize" }}>{t}</div>
+                <div key={t} style={{ padding: "3px 9px", borderRadius: 5, fontSize: 10, textTransform: "capitalize",
+                  color: t === "heatmap" ? S.tabActiveText : S.muted,
+                  background: t === "heatmap" ? S.tabActiveBg : "transparent",
+                  border: `1px solid ${t === "heatmap" ? S.tabActiveBorder : S.border}`,
+                }}>{t}</div>
               ))}
             </div>
           </div>
           <div style={{ height: isMobile ? 160 : 210 }}><DemoHeatmap /></div>
         </div>
-        <p style={{ fontSize: 11, color: "#1e2d3d", marginTop: 10, fontFamily: "'JetBrains Mono', monospace" }}>↑ live demo — prices drift in real time</p>
+        <p style={{ fontSize: 11, color: S.subtext, marginTop: 10, fontFamily: "'JetBrains Mono', monospace" }}>↑ live demo — prices drift in real time</p>
       </section>
 
       {/* ── Stats ── */}
       <section ref={el => revealRefs.current[0] = el} style={{ position: "relative", zIndex: 1, maxWidth: 820, margin: "0 auto", padding: isMobile ? "0 16px 48px" : "0 24px 64px", opacity: revealed[0] ? 1 : 0, transform: revealed[0] ? "none" : "translateY(24px)", transition: "opacity 0.6s ease, transform 0.6s ease" }}>
-        <div style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${S.border}`, borderRadius: 16, padding: isMobile ? "28px 20px" : "40px 48px", display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 32 }}>
-          <UserCounter />
-          <Stat value="Free" label="FOREVER · NO ADS" />
-          <Stat value="0 kb" label="DATA SENT TO SERVERS" />
+        <div style={{ background: S.statsBg, border: `1px solid ${S.border}`, borderRadius: 16, padding: isMobile ? "28px 20px" : "40px 48px", display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 32 }}>
+          <UserCounter S={S} />
+          <Stat value="Free" label="FOREVER · NO ADS" S={S} />
+          <Stat value="0 kb" label="DATA SENT TO SERVERS" S={S} />
         </div>
       </section>
 
@@ -419,12 +460,11 @@ export default function Landing() {
             { icon: "📋", title: "Paste from your spreadsheet", desc: "Bulk import from Excel or Google Sheets. Two columns, one paste, your whole portfolio in seconds." },
           ].map((f, i) => (
             <div key={f.title} className={revealed[1] ? "card-reveal visible" : "card-reveal"} style={{ transitionDelay: `${i * 80}ms` }}>
-              <Feature icon={f.icon} title={f.title} desc={f.desc} />
+              <Feature icon={f.icon} title={f.title} desc={f.desc} S={S} />
             </div>
           ))}
         </div>
       </section>
-
 
       {/* ── Privacy section ── */}
       <section ref={el => revealRefs.current[2] = el} style={{ position: "relative", zIndex: 1, maxWidth: 860, margin: "0 auto", padding: "0 24px 64px", opacity: revealed[2] ? 1 : 0, transform: revealed[2] ? "none" : "translateY(24px)", transition: "opacity 0.6s ease, transform 0.6s ease" }}>
@@ -438,8 +478,8 @@ export default function Landing() {
             <h2 style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: "clamp(26px, 4vw, 40px)", fontWeight: 400, letterSpacing: "-0.02em", margin: "0 0 12px" }}>
               Your portfolio stays<br /><em>on your device. Always.</em>
             </h2>
-            <p style={{ color: "#64748b", fontSize: 15, maxWidth: 520, margin: "0 auto", lineHeight: 1.7 }}>
-              Karta is built so that it <strong style={{ color: "#e2e8f0" }}>cannot</strong> see your holdings even if it wanted to.
+            <p style={{ color: S.muted, fontSize: 15, maxWidth: 520, margin: "0 auto", lineHeight: 1.7 }}>
+              Karta is built so that it <strong style={{ color: S.strong }}>cannot</strong> see your holdings even if it wanted to.
               Here's exactly what happens when you use it.
             </p>
           </div>
@@ -453,55 +493,55 @@ export default function Landing() {
             ].map(item => (
               <div key={item.title} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <div style={{ fontSize: 22 }}>{item.icon}</div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: "#e2e8f0" }}>{item.title}</div>
-                <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.65 }}>{item.desc}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: S.strong }}>{item.title}</div>
+                <div style={{ fontSize: 13, color: S.muted, lineHeight: 1.65 }}>{item.desc}</div>
               </div>
             ))}
           </div>
 
           {/* localStorage explainer */}
-          <div style={{ background: "rgba(0,0,0,0.25)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: "24px 28px", marginBottom: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: "#e2e8f0", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ background: S.privBoxBg, border: `1px solid ${S.privBoxBorder}`, borderRadius: 14, padding: "24px 28px", marginBottom: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: S.strong, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
               <span>💡</span> "If nothing goes to your servers — how does it remember my stocks?"
             </div>
-            <p style={{ fontSize: 13, color: "#64748b", lineHeight: 1.75, marginBottom: 16 }}>
-              Great question. Karta uses a browser feature called <strong style={{ color: "#94a3b8" }}>localStorage</strong> — a small storage area built into every web browser, completely separate from the internet. Think of it like a notebook that lives inside your browser on your device.
+            <p style={{ fontSize: 13, color: S.muted, lineHeight: 1.75, marginBottom: 16 }}>
+              Great question. Karta uses a browser feature called <strong style={{ color: S.code }}>localStorage</strong> — a small storage area built into every web browser, completely separate from the internet. Think of it like a notebook that lives inside your browser on your device.
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 16 }}>
               {[
-                { icon: "🔑", label: "API key", where: "Your browser only" },
+                { icon: "🔑", label: "API key",              where: "Your browser only" },
                 { icon: "📋", label: "Tickers & share counts", where: "Your browser only" },
-                { icon: "🏷️", label: "App title preference", where: "Your browser only" },
-                { icon: "📡", label: "Stock prices", where: "Fetched live from Finnhub" },
+                { icon: "🏷️", label: "App title preference",  where: "Your browser only" },
+                { icon: "📡", label: "Stock prices",          where: "Fetched live from Finnhub" },
               ].map(item => (
-                <div key={item.label} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 3 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>{item.icon} {item.label}</div>
-                  <div style={{ fontSize: 11, color: "#475569", fontFamily: "'JetBrains Mono', monospace" }}>→ {item.where}</div>
+                <div key={item.label} style={{ background: S.privItemBg, borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 3 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: S.strong }}>{item.icon} {item.label}</div>
+                  <div style={{ fontSize: 11, color: S.muted, fontFamily: "'JetBrains Mono', monospace" }}>→ {item.where}</div>
                 </div>
               ))}
             </div>
-            <p style={{ fontSize: 13, color: "#64748b", lineHeight: 1.75 }}>
-              You can verify this yourself: open your browser's DevTools (<strong style={{ color: "#94a3b8" }}>F12</strong>), go to <strong style={{ color: "#94a3b8" }}>Application → Local Storage</strong>, and you'll see your data sitting right there in your own browser — not on any server anywhere.
+            <p style={{ fontSize: 13, color: S.muted, lineHeight: 1.75 }}>
+              You can verify this yourself: open your browser's DevTools (<strong style={{ color: S.code }}>F12</strong>), go to <strong style={{ color: S.code }}>Application → Local Storage</strong>, and you'll see your data sitting right there in your own browser — not on any server anywhere.
             </p>
           </div>
 
           {/* Technical proof bar */}
-          <div style={{ background: "rgba(0,0,0,0.3)", borderRadius: 12, padding: "18px 24px", display: "flex", flexWrap: "wrap", gap: 20, alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontSize: 12, color: "#475569", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.04em" }}>WHAT KARTA COLLECTS:</span>
+          <div style={{ background: S.privBarBg, borderRadius: 12, padding: "18px 24px", display: "flex", flexWrap: "wrap", gap: 20, alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 12, color: S.muted, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.04em" }}>WHAT KARTA COLLECTS:</span>
             {[
               { label: "Your stock tickers", no: true },
-              { label: "Share counts", no: true },
-              { label: "Portfolio value", no: true },
-              { label: "Your identity", no: true },
-              { label: "Page visit count", no: false },
+              { label: "Share counts",       no: true },
+              { label: "Portfolio value",    no: true },
+              { label: "Your identity",      no: true },
+              { label: "Page visit count",   no: false },
             ].map(item => (
               <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: item.no ? "#f87171" : "#4ade80" }}>{item.no ? "✗" : "✓"}</span>
-                <span style={{ fontSize: 12, color: item.no ? "#64748b" : "#94a3b8" }}>{item.label}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: item.no ? "#f87171" : S.green }}>{item.no ? "✗" : "✓"}</span>
+                <span style={{ fontSize: 12, color: item.no ? S.muted : S.code }}>{item.label}</span>
               </div>
             ))}
           </div>
-          <p style={{ textAlign: "center", fontSize: 12, color: "#334155", marginTop: 14, fontFamily: "'JetBrains Mono', monospace" }}>
+          <p style={{ textAlign: "center", fontSize: 12, color: S.subtext, marginTop: 14, fontFamily: "'JetBrains Mono', monospace" }}>
             * We count page visits (anonymously, no IP stored) only to show the user counter on this page.
           </p>
         </div>
@@ -515,9 +555,9 @@ export default function Landing() {
           </h2>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
-          <Step n="1" title="Get a free Finnhub API key" desc="Sign up at finnhub.io — no credit card. 60 req/min on the free tier handles any personal portfolio easily." />
-          <Step n="2" title="Paste your holdings" desc="Type tickers and share counts, or bulk-paste two columns straight from your spreadsheet." />
-          <Step n="3" title="Watch your map light up" desc="Each tile fills with color as data arrives. Your portfolio is fully visualized within seconds." />
+          <Step n="1" title="Get a free Finnhub API key" desc="Sign up at finnhub.io — no credit card. 60 req/min on the free tier handles any personal portfolio easily." S={S} />
+          <Step n="2" title="Paste your holdings" desc="Type tickers and share counts, or bulk-paste two columns straight from your spreadsheet." S={S} />
+          <Step n="3" title="Watch your map light up" desc="Each tile fills with color as data arrives. Your portfolio is fully visualized within seconds." S={S} />
         </div>
       </section>
 
@@ -536,9 +576,9 @@ export default function Landing() {
               onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
               onMouseLeave={e => e.currentTarget.style.transform = ""}
             >Open Karta →</a>
-            <a href="https://buymeacoffee.com/karta" target="_blank" rel="noreferrer" style={{ padding: "14px 28px", borderRadius: 10, border: "1px solid rgba(255,214,0,0.18)", background: "rgba(255,214,0,0.04)", color: "#fde68a", fontSize: 15, fontWeight: 600, textDecoration: "none", transition: "all 0.2s" }}
-              onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,214,0,0.1)"; e.currentTarget.style.borderColor = "rgba(255,214,0,0.35)"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,214,0,0.04)"; e.currentTarget.style.borderColor = "rgba(255,214,0,0.18)"; }}
+            <a href="https://buymeacoffee.com/karta" target="_blank" rel="noreferrer" style={{ padding: "14px 28px", borderRadius: 10, border: `1px solid ${coffeeBorder}`, background: "transparent", color: coffeeText, fontSize: 15, fontWeight: 600, textDecoration: "none", transition: "all 0.2s" }}
+              onMouseEnter={e => { e.currentTarget.style.background = coffeeHoverBg; e.currentTarget.style.borderColor = coffeeHoverBorder; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = coffeeBorder; }}
             >☕ Buy me a coffee</a>
           </div>
         </div>
@@ -548,7 +588,7 @@ export default function Landing() {
       <footer style={{ position: "relative", zIndex: 1, borderTop: `1px solid ${S.border}`, padding: isMobile ? "20px 16px" : "24px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <KartaLogo size={22} />
-          <span style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 15 }}>Karta</span>
+          <span style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 15, color: S.text }}>Karta</span>
           <span style={{ color: S.muted, fontSize: 12 }}>— free & open source</span>
         </div>
         <div style={{ display: "flex", gap: 20 }}>
@@ -563,9 +603,8 @@ export default function Landing() {
       </footer>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;700&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #080b12; }
+        body { background: ${S.bg}; }
         ::selection { background: rgba(74,222,128,0.2); }
 
         .float-tile { animation: floatUp linear infinite; will-change: transform, opacity; }
@@ -580,9 +619,9 @@ export default function Landing() {
           overflow: hidden; width: 100%;
           mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
           -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
-          border-top: 1px solid rgba(255,255,255,0.06);
-          border-bottom: 1px solid rgba(255,255,255,0.06);
-          padding: 9px 0; background: rgba(255,255,255,0.015);
+          border-top: 1px solid ${S.border};
+          border-bottom: 1px solid ${S.border};
+          padding: 9px 0; background: ${S.tickerBg};
         }
         .ticker-track { display: inline-flex; align-items: center; animation: tickerScroll 32s linear infinite; will-change: transform; white-space: nowrap; }
         @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }

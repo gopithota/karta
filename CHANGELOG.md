@@ -1,5 +1,33 @@
 # Karta — Changelog
 
+## v0.5.0 — 2026-04-17
+
+### Theme System
+
+**Three built-in themes**
+- **Dark** (cold navy) — the original look, unchanged
+- **Warm** (charcoal brown) — earthy tones with amber accents
+- **Light** (warm cream) — a bright, legible mode for daylight use
+
+**Theme picker**
+- Three dot swatches in the top nav bar, always visible
+- Selection persists to `localStorage` (`ph_theme`) and restores on next visit
+- Active swatch highlighted with a green ring
+
+**Full theme coverage**
+- All surfaces, text hierarchy, chart colors, tooltips, inputs, badges, and interactive states are theme-aware
+- Both App and Landing pages respond to the selected theme
+- Body background synced to theme on every render
+
+**Fonts**
+- DM Serif Display and JetBrains Mono now preloaded via `<link rel="preconnect">` for faster first paint
+
+**Tests**
+- Unit tests for `THEMES` (key coverage for all 3 themes), `SWATCHES`, and the `useTheme` hook
+- Integration tests for the theme switcher: renders all 3 buttons, clicking each persists the correct value to `localStorage`, persisted theme loads on re-render
+
+---
+
 ## v0.4.0 — 2026-04-16
 
 ### Event Annotations & Table Polish

@@ -1,5 +1,7 @@
 import { describe, test, expect, beforeEach } from "vitest";
+import { renderHook, act } from "@testing-library/react";
 import { computeTreemap, perfColor, IS_DEMO, applySnapshot, applyEvent } from "../utils.js";
+import { THEMES, SWATCHES, useTheme } from "../theme.js";
 
 // ─── computeTreemap ───────────────────────────────────────────────
 describe("computeTreemap", () => {
@@ -181,6 +183,68 @@ describe("applySnapshot", () => {
     const result = applySnapshot(prev, "2026-04-15", 99999, 5.0);
     expect(result).toHaveLength(365);
     expect(result[result.length - 1].value).toBe(99999);
+  });
+});
+
+// ─── THEMES / SWATCHES ───────────────────────────────────────────
+describe("THEMES", () => {
+  const REQUIRED_KEYS = ["bg", "panel", "border", "text", "muted", "green", "accent", "link"];
+
+  test("all three themes are defined", () => {
+    expect(THEMES).toHaveProperty("dark");
+    expect(THEMES).toHaveProperty("warm");
+    expect(THEMES).toHaveProperty("light");
+  });
+
+  test.each(["dark", "warm", "light"])("%s theme has all required style keys", (name) => {
+    const theme = THEMES[name];
+    REQUIRED_KEYS.forEach(key => {
+      expect(theme, `${name}.${key} missing`).toHaveProperty(key);
+      expect(typeof theme[key]).toBe("string");
+    });
+  });
+});
+
+describe("SWATCHES", () => {
+  test("has an entry for each theme", () => {
+    const keys = SWATCHES.map(s => s.key);
+    expect(keys).toContain("dark");
+    expect(keys).toContain("warm");
+    expect(keys).toContain("light");
+  });
+
+  test("every swatch has key, dot, and label", () => {
+    SWATCHES.forEach(sw => {
+      expect(typeof sw.key).toBe("string");
+      expect(typeof sw.dot).toBe("string");
+      expect(typeof sw.label).toBe("string");
+    });
+  });
+});
+
+// ─── useTheme ─────────────────────────────────────────────────────
+describe("useTheme", () => {
+  test("defaults to 'dark' when nothing is stored", () => {
+    const { result } = renderHook(() => useTheme());
+    expect(result.current[0]).toBe("dark");
+  });
+
+  test("reads persisted theme from localStorage on init", () => {
+    localStorage.setItem("ph_theme", "light");
+    const { result } = renderHook(() => useTheme());
+    expect(result.current[0]).toBe("light");
+  });
+
+  test("setTheme updates the returned theme value", () => {
+    const { result } = renderHook(() => useTheme());
+    act(() => result.current[1]("warm"));
+    expect(result.current[0]).toBe("warm");
+  });
+
+  test("setTheme persists the selection to localStorage", () => {
+    const { result } = renderHook(() => useTheme());
+    act(() => result.current[1]("light"));
+    expect(localStorage.getItem("ph_theme")).toBe("light");
   });
 });
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { computeTreemap, perfColor, IS_DEMO, applySnapshot, applyEvent } from "./utils.js";
+import { THEMES, SWATCHES, useTheme } from "./theme.js";
 
 const LEGEND_STOPS = [-10, -7, -4, -2, -1, 0, 1, 2, 4, 7, 10];
 
@@ -30,7 +31,7 @@ const DEFAULT_PORTFOLIO = [
 const RL_WINDOW = 900; // must match api/finnhub.js
 
 // ─── History Chart ────────────────────────────────────────────────
-function HistoryChart({ history, events }) {
+function HistoryChart({ history, events, S }) {
   const [hover, setHover] = useState(null);       // index of hovered line point
   const [hovEvent, setHovEvent] = useState(null); // hovered event marker object
   const hovEventRef = useRef(null);               // sync ref so handleMouseMove can read it
@@ -48,9 +49,9 @@ function HistoryChart({ history, events }) {
 
   if (history.length === 0) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: "60px 20px", color: "#64748b", textAlign: "center" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: "60px 20px", color: S.muted, textAlign: "center" }}>
         <div style={{ fontSize: 40 }}>📈</div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#94a3b8" }}>No history yet</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: S.muted }}>No history yet</div>
         <div style={{ fontSize: 13, maxWidth: 340, lineHeight: 1.6 }}>
           Portfolio value is recorded each weekday after a refresh. Hit Refresh on a market day to start tracking.
         </div>
@@ -100,7 +101,7 @@ function HistoryChart({ history, events }) {
     const dateEvts = events.filter(e => e.date === ev.date);
     const hasAdd = dateEvts.some(e => e.type === "add" || e.type === "update");
     const hasRemove = dateEvts.some(e => e.type === "remove");
-    const color = hasAdd && hasRemove ? "#facc15" : hasRemove ? "#f87171" : "#4ade80";
+    const color = hasAdd && hasRemove ? "#facc15" : hasRemove ? "#f87171" : S.green;
     eventMarkers.push({ date: ev.date, evts: dateEvts, x: xScale(nearestIdx), color });
   });
 
@@ -117,7 +118,7 @@ function HistoryChart({ history, events }) {
   const hovPt = hover != null && !hovEvent ? pts[hover] : null;
   const hovH  = hover != null && !hovEvent ? history[hover] : null;
   const trend = vals.length >= 2 ? vals[vals.length - 1] - vals[0] : 0;
-  const lineColor = trend >= 0 ? "#4ade80" : "#f87171";
+  const lineColor = trend >= 0 ? S.green : "#f87171";
 
   return (
     <div style={{ position: "relative", width: "100%" }}>
@@ -138,13 +139,13 @@ function HistoryChart({ history, events }) {
           const y = yScale(v);
           return (
             <g key={i}>
-              <line x1={PAD.left} x2={W - PAD.right} y1={y} y2={y} stroke="#1c2536" strokeWidth={1} />
-              <text x={PAD.left - 8} y={y} textAnchor="end" dominantBaseline="middle" fill="#475569" fontSize={10}>{fmtVal(v)}</text>
+              <line x1={PAD.left} x2={W - PAD.right} y1={y} y2={y} stroke={S.chartGrid} strokeWidth={1} />
+              <text x={PAD.left - 8} y={y} textAnchor="end" dominantBaseline="middle" fill={S.chartLabel} fontSize={10}>{fmtVal(v)}</text>
             </g>
           );
         })}
         {xLabels.map(({ i, label }) => (
-          <text key={i} x={xScale(i)} y={H - 6} textAnchor="middle" fill="#475569" fontSize={10}>{label}</text>
+          <text key={i} x={xScale(i)} y={H - 6} textAnchor="middle" fill={S.chartLabel} fontSize={10}>{label}</text>
         ))}
         {/* Event marker lines + bubbles — intercept mouse so line hover stays off */}
         {eventMarkers.map((em) => (
@@ -173,8 +174,8 @@ function HistoryChart({ history, events }) {
         {history.length === 1 && <circle cx={pts[0].x} cy={pts[0].y} r={5} fill={lineColor} />}
         {hovPt && (
           <g>
-            <line x1={hovPt.x} x2={hovPt.x} y1={PAD.top} y2={PAD.top + cH} stroke="#334155" strokeWidth={1} strokeDasharray="3,3" />
-            <circle cx={hovPt.x} cy={hovPt.y} r={5} fill={lineColor} stroke="#0c0f18" strokeWidth={2} />
+            <line x1={hovPt.x} x2={hovPt.x} y1={PAD.top} y2={PAD.top + cH} stroke={S.chartCross} strokeWidth={1} strokeDasharray="3,3" />
+            <circle cx={hovPt.x} cy={hovPt.y} r={5} fill={lineColor} stroke={S.bg} strokeWidth={2} />
           </g>
         )}
       </svg>
@@ -188,24 +189,25 @@ function HistoryChart({ history, events }) {
             left: leftPct > 65 ? "auto" : `${leftPct}%`,
             right: leftPct > 65 ? `${100 - leftPct}%` : "auto",
             transform: leftPct <= 65 ? "translateX(-50%)" : "none",
-            background: "#0e1420", border: `1px solid ${hovEvent.color}44`,
+            background: S.tooltip, border: `1px solid ${hovEvent.color}44`,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
             borderRadius: 8, padding: "8px 12px", pointerEvents: "none", zIndex: 10, minWidth: 148,
           }}>
-            <div style={{ fontSize: 11, color: "#64748b", marginBottom: 5 }}>
+            <div style={{ fontSize: 11, color: S.muted, marginBottom: 5 }}>
               {new Date(hovEvent.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
             </div>
             {hovEvent.evts.map((ev, i) => (
               <div key={i} style={{ lineHeight: 1.7 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 5, fontSize: 12, fontWeight: 600,
-                  color: ev.type === "add" ? "#4ade80" : ev.type === "remove" ? "#f87171" : "#93c5fd" }}>
+                  color: ev.type === "add" ? S.green : ev.type === "remove" ? "#f87171" : S.link }}>
                   <span style={{ fontWeight: 800 }}>{ev.type === "add" ? "+" : ev.type === "remove" ? "−" : "~"}</span>
                   <span>{ev.ticker}</span>
-                  <span style={{ color: "#64748b", fontWeight: 400 }}>
+                  <span style={{ color: S.muted, fontWeight: 400 }}>
                     {ev.type === "update" ? `${ev.prevShares} → ${ev.shares}sh` : `${ev.shares}sh`}
                   </span>
                 </div>
                 {ev.note && (
-                  <div style={{ fontSize: 10, color: "#475569", fontStyle: "italic", marginTop: -2, maxWidth: 180, lineHeight: 1.4 }}>
+                  <div style={{ fontSize: 10, color: S.muted, fontStyle: "italic", marginTop: -2, maxWidth: 180, lineHeight: 1.4 }}>
                     {ev.note}
                   </div>
                 )}
@@ -224,15 +226,16 @@ function HistoryChart({ history, events }) {
             left: leftPct > 65 ? "auto" : `${leftPct}%`,
             right: leftPct > 65 ? `${100 - leftPct}%` : "auto",
             transform: leftPct <= 65 ? "translateX(-50%)" : "none",
-            background: "#1e293b", border: "1px solid #1c2536", borderRadius: 8,
+            background: S.tooltip, border: `1px solid ${S.border}`, borderRadius: 8,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
             padding: "8px 12px", pointerEvents: "none", zIndex: 10, minWidth: 148,
           }}>
-            <div style={{ fontSize: 11, color: "#64748b", marginBottom: 2 }}>
+            <div style={{ fontSize: 11, color: S.muted, marginBottom: 2 }}>
               {new Date(hovH.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
             </div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: "#e2e8f0" }}>{fmtVal(hovH.value)}</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: S.text }}>{fmtVal(hovH.value)}</div>
             {hovH.change != null && (
-              <div style={{ fontSize: 12, fontWeight: 700, color: hovH.change >= 0 ? "#4ade80" : "#f87171" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: hovH.change >= 0 ? S.green : "#f87171" }}>
                 {hovH.change >= 0 ? "▲" : "▼"} {Math.abs(hovH.change).toFixed(2)}% today
               </div>
             )}
@@ -244,13 +247,16 @@ function HistoryChart({ history, events }) {
 }
 
 
-const S = {
-  bg: "#0c0f18", panel: "#131825", border: "#1c2536",
-  accent: "#3b82f6", text: "#e2e8f0", muted: "#64748b",
-};
+// S is now instantiated per-render inside App() based on theme
 
 // ─── Main ─────────────────────────────────────────────────────────
 export default function App() {
+  const [theme, setTheme] = useTheme();
+  const S = THEMES[theme];
+
+  // Sync body background with theme
+  useEffect(() => { document.body.style.background = S.bg; }, [S.bg]);
+
   const [apiKey,        setApiKey]        = useState(() => localStorage.getItem("ph_apikey") || "");
   const [apiInput,      setApiInput]      = useState(() => localStorage.getItem("ph_apikey") || "");
   const [portfolioName, setPortfolioName] = useState(() => localStorage.getItem("ph_name") || "Portfolio Heatmap");
@@ -607,10 +613,10 @@ export default function App() {
 
   const btnBase = (active) => ({
     padding: "5px 13px", borderRadius: 6,
-    border: active ? `1px solid ${S.accent}` : `1px solid ${S.border}`,
+    border: active ? `1px solid ${S.tabActiveBorder}` : `1px solid ${S.border}`,
     cursor: "pointer", fontSize: 13, fontWeight: 500, transition: "all .15s",
-    background: active ? "#1a3160" : S.panel,
-    color: active ? "#93c5fd" : S.muted,
+    background: active ? S.tabActiveBg : S.panel,
+    color: active ? S.tabActiveText : S.muted,
   });
 
   // ─── Render ────────────────────────────────────────────────────────
@@ -622,25 +628,25 @@ export default function App() {
         <div style={{
           position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)",
           zIndex: 200, width: "min(580px, calc(100vw - 40px))",
-          background: "#0e1420", border: "1px solid rgba(74,222,128,0.25)",
+          background: S.tooltip, border: "1px solid rgba(74,222,128,0.25)",
           borderRadius: 14, padding: "18px 20px",
           boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
           display: "flex", alignItems: "flex-start", gap: 14,
         }}>
           <div style={{ fontSize: 22, flexShrink: 0 }}>🔒</div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: "#e2e8f0", marginBottom: 4 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: S.strong, marginBottom: 4 }}>
               Your portfolio never leaves your device
             </div>
-            <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.6 }}>
-              Your tickers, share counts, and API key are stored only in <strong style={{ color: "#94a3b8" }}>your browser's localStorage</strong>.
+            <div style={{ fontSize: 13, color: S.muted, lineHeight: 1.6 }}>
+              Your tickers, share counts, and API key are stored only in <strong style={{ color: S.code }}>your browser's localStorage</strong>.
               Stock prices are fetched directly from Finnhub — nothing passes through our servers.
               We never see your holdings.
             </div>
           </div>
           <button
             onClick={() => { setShowPrivacyNotice(false); localStorage.setItem("ph_privacy_seen", "1"); }}
-            style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 7, border: "none", cursor: "pointer", background: "rgba(74,222,128,0.15)", color: "#4ade80", fontSize: 12, fontWeight: 700 }}
+            style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 7, border: "none", cursor: "pointer", background: S.greenDim, color: S.green, fontSize: 12, fontWeight: 700 }}
           >Got it</button>
         </div>
       )}
@@ -650,8 +656,7 @@ export default function App() {
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 12, minWidth: 0 }}>
           <a href="/" title="Back to Karta home" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none", color: "inherit", minWidth: 0 }}>
             <svg width="22" height="22" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
-              <rect width="22" height="22" rx="5" fill="#0a1a12"/>
-              {[["#1a4731","#1e5c3e","#2d7a52"],["#1e5c3e","#2d7a52","#3a9966"],["#2d7a52","#3a9966","#4ade80"],["#1a3a28","#2d7a52","#22c55e"]].map((row, ri) =>
+              {[["#2a6040","#3a7a52","#4a9966"],["#3a7a52","#4a9966","#5ab878"],["#4a9966","#5ab878","#4ade80"],["#235238","#4a9966","#22c55e"]].map((row, ri) =>
                 row.map((fill, ci) => {
                   const cell = 22/4.2, gap = cell*0.18, r = cell*0.28;
                   const totalW = 3*cell+2*gap, totalH = 4*cell+3*gap;
@@ -662,7 +667,7 @@ export default function App() {
             <span style={{ fontSize: isMobile ? 14 : 18, fontWeight: 800, letterSpacing: "-0.5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: isMobile ? 110 : "none" }}>{portfolioName}</span>
           </a>
           {aggReturn !== null && !isMobile && (
-            <span style={{ fontSize: 13, fontWeight: 700, color: aggReturn >= 0 ? "#4ade80" : "#f87171", flexShrink: 0 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: aggReturn >= 0 ? S.green : "#f87171", flexShrink: 0 }}>
               {aggReturn >= 0 ? "▲" : "▼"} {Math.abs(aggReturn).toFixed(2)}%
             </span>
           )}
@@ -698,8 +703,8 @@ export default function App() {
               display: "flex", alignItems: "center", gap: 5,
               padding: "4px 10px", borderRadius: 6,
               border: "1px solid rgba(74,222,128,0.2)",
-              background: "rgba(74,222,128,0.06)",
-              fontSize: 11, color: "#4ade80", fontWeight: 600,
+              background: S.greenDim,
+              fontSize: 11, color: S.green, fontWeight: 600,
               cursor: "default", letterSpacing: "0.02em",
             }}>
               🔒 Local only
@@ -715,6 +720,21 @@ export default function App() {
               {isMobile ? short : label}
             </button>
           ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", borderRadius: 8, border: `1px solid ${S.border}`, background: S.panel }}>
+            {SWATCHES.map(sw => (
+              <button
+                key={sw.key}
+                onClick={() => setTheme(sw.key)}
+                title={sw.label}
+                style={{
+                  width: 14, height: 14, borderRadius: "50%", border: theme === sw.key ? `2px solid ${S.green}` : "2px solid transparent",
+                  background: sw.dot, cursor: "pointer", padding: 0, outline: "none", flexShrink: 0,
+                  boxShadow: theme === sw.key ? `0 0 0 1px ${S.green}44` : "none",
+                  transition: "border-color 0.15s, box-shadow 0.15s",
+                }}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
@@ -728,7 +748,7 @@ export default function App() {
           <button
             onClick={() => fetchData(apiKey, true)}
             disabled={loading || rateLimitSecs > 0}
-            style={{ padding: "5px 14px", borderRadius: 6, border: "none", cursor: loading || rateLimitSecs > 0 ? "not-allowed" : "pointer", background: loading ? "#374151" : S.accent, color: "#fff", fontSize: 13, fontWeight: 600, opacity: rateLimitSecs > 0 ? 0.5 : 1 }}
+            style={{ padding: "5px 14px", borderRadius: 6, border: "none", cursor: loading || rateLimitSecs > 0 ? "not-allowed" : "pointer", background: loading ? S.panel : S.accent, color: loading ? S.muted : "#fff", fontSize: 13, fontWeight: 600, opacity: rateLimitSecs > 0 ? 0.5 : 1 }}
           >
             {loading ? "⟳ Loading…" : rateLimitSecs > 0
               ? `⟳ ${Math.floor(rateLimitSecs / 60)}:${String(rateLimitSecs % 60).padStart(2, "0")}`
@@ -751,16 +771,16 @@ export default function App() {
               <span style={{ color: "#f87171", fontWeight: 600 }}>
                 Slow down! Next refresh in {Math.floor(rateLimitSecs / 60)}:{String(rateLimitSecs % 60).padStart(2, "0")}
               </span>
-              <span style={{ color: "#1e293b" }}>·</span>
-              <button onClick={() => setTab("setup")} style={{ background: "none", border: "none", cursor: "pointer", color: "#93c5fd", fontSize: 12, fontWeight: 600, padding: 0 }}>
+              <span style={{ color: S.subtext }}>·</span>
+              <button onClick={() => setTab("setup")} style={{ background: "none", border: "none", cursor: "pointer", color: S.link, fontSize: 12, fontWeight: 600, padding: 0 }}>
                 Get your own key for unlimited refreshes →
               </button>
             </>
           ) : (
             <>
               <span>{isMobile ? "Shared key · 15 min cache" : "Using Karta's shared key — prices cached every 15 min"}</span>
-              <span style={{ color: "#1e293b" }}>·</span>
-              <button onClick={() => setTab("setup")} style={{ background: "none", border: "none", cursor: "pointer", color: "#93c5fd", fontSize: 12, fontWeight: 600, padding: 0 }}>
+              <span style={{ color: S.subtext }}>·</span>
+              <button onClick={() => setTab("setup")} style={{ background: "none", border: "none", cursor: "pointer", color: S.link, fontSize: 12, fontWeight: 600, padding: 0 }}>
                 {isMobile ? "Get your own key →" : "Get your own free key →"}
               </button>
             </>
@@ -782,7 +802,7 @@ export default function App() {
           )}
           {loading && (
             <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, pointerEvents: "none" }}>
-              <div style={{ background: "rgba(12,15,24,0.85)", padding: "12px 24px", borderRadius: 10, fontSize: 14, color: S.muted }}>
+              <div style={{ background: S.overlay, padding: "12px 24px", borderRadius: 10, fontSize: 14, color: S.muted }}>
                 Fetching {portfolio.length} stocks…
               </div>
             </div>
@@ -792,7 +812,7 @@ export default function App() {
             <div style={{
               position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)",
               zIndex: 20, whiteSpace: "nowrap",
-              background: "rgba(14,20,32,0.92)", backdropFilter: "blur(10px)",
+              background: S.overlay, backdropFilter: "blur(10px)",
               border: "1px solid rgba(250,204,21,0.3)",
               borderRadius: 10, padding: "9px 18px",
               display: "flex", alignItems: "center", gap: 10,
@@ -800,12 +820,12 @@ export default function App() {
             }}>
               <span style={{ fontSize: 14 }}>✨</span>
               <span style={{ fontSize: 13, color: "#fde68a", fontWeight: 600 }}>Demo portfolio</span>
-              <span style={{ color: "#334155", fontSize: 13 }}>·</span>
-              <span style={{ fontSize: 13, color: "#94a3b8" }}>Customize it for your holdings</span>
-              <span style={{ color: "#334155", fontSize: 13 }}>—</span>
+              <span style={{ color: S.subtext, fontSize: 13 }}>·</span>
+              <span style={{ fontSize: 13, color: S.muted }}>Customize it for your holdings</span>
+              <span style={{ color: S.subtext, fontSize: 13 }}>—</span>
               <button
                 onClick={() => setTab("setup")}
-                style={{ fontSize: 12, fontWeight: 700, color: "#4ade80", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline", textUnderlineOffset: 3 }}
+                style={{ fontSize: 12, fontWeight: 700, color: S.green, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline", textUnderlineOffset: 3 }}
               >Set up yours →</button>
             </div>
           )}
@@ -823,17 +843,17 @@ export default function App() {
                 <button key={hint.label} onClick={hint.action} style={{
                   display: "flex", alignItems: "center", gap: 7,
                   padding: "6px 12px", borderRadius: 8,
-                  background: "rgba(14,20,32,0.88)", backdropFilter: "blur(8px)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  color: "#94a3b8", fontSize: 12, fontWeight: 500,
+                  background: S.overlay, backdropFilter: "blur(8px)",
+                  border: `1px solid ${S.border}`,
+                  color: S.muted, fontSize: 12, fontWeight: 500,
                   cursor: "pointer", transition: "color 0.15s, border-color 0.15s",
                 }}
-                  onMouseEnter={e => { e.currentTarget.style.color = "#e2e8f0"; e.currentTarget.style.borderColor = "rgba(74,222,128,0.25)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = "#94a3b8"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
+                  onMouseEnter={e => { e.currentTarget.style.color = S.text; e.currentTarget.style.borderColor = S.green + "44"; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = S.muted; e.currentTarget.style.borderColor = S.border; }}
                 >
                   <span style={{ fontSize: 13 }}>{hint.icon}</span>
                   {hint.label}
-                  <span style={{ color: "#4ade80", fontSize: 11 }}>→</span>
+                  <span style={{ color: S.green, fontSize: 11 }}>→</span>
                 </button>
               ))}
             </div>
@@ -863,18 +883,18 @@ export default function App() {
               );
             })}
             {tooltip && (
-              <div style={{ position: "absolute", bottom: 48, left: 16, background: "#1e293b", border: `1px solid ${S.border}`, borderRadius: 8, padding: "10px 14px", pointerEvents: isMobile ? "auto" : "none", zIndex: 20, minWidth: 160 }}>
+              <div style={{ position: "absolute", bottom: 48, left: 16, background: S.tooltip, border: `1px solid ${S.border}`, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", borderRadius: 8, padding: "10px 14px", pointerEvents: isMobile ? "auto" : "none", zIndex: 20, minWidth: 160 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                   <div style={{ fontWeight: 800, fontSize: 16 }}>{tooltip.ticker}</div>
                   {isMobile && <button onClick={() => setTooltip(null)} style={{ background: "none", border: "none", color: S.muted, fontSize: 18, cursor: "pointer", padding: "0 0 0 12px", lineHeight: 1 }}>×</button>}
                 </div>
                 {tooltip.price && <div style={{ fontSize: 13, color: S.muted }}>Price: <strong style={{ color: S.text }}>${tooltip.price.toFixed(2)}</strong></div>}
-                {tooltip.perf !== null && <div style={{ fontSize: 13, color: tooltip.perf >= 0 ? "#4ade80" : "#f87171", fontWeight: 700 }}>Today: {tooltip.perf >= 0 ? "+" : ""}{tooltip.perf.toFixed(2)}%</div>}
+                {tooltip.perf !== null && <div style={{ fontSize: 13, color: tooltip.perf >= 0 ? S.green : "#f87171", fontWeight: 700 }}>Today: {tooltip.perf >= 0 ? "+" : ""}{tooltip.perf.toFixed(2)}%</div>}
                 <div style={{ fontSize: 12, color: S.muted, marginTop: 4 }}>{((getWeight(tooltip.ticker) / totalValue) * 100).toFixed(1)}% of portfolio</div>
               </div>
             )}
             {rects.length > 0 && (
-              <div style={{ position: "absolute", bottom: 10, right: 12, display: "flex", alignItems: "center", gap: 3, background: "rgba(12,15,24,.75)", backdropFilter: "blur(4px)", padding: "5px 10px", borderRadius: 7, fontSize: 11, color: S.muted }}>
+              <div style={{ position: "absolute", bottom: 10, right: 12, display: "flex", alignItems: "center", gap: 3, background: S.overlay, backdropFilter: "blur(4px)", padding: "5px 10px", borderRadius: 7, fontSize: 11, color: S.muted }}>
                 <span>-10%</span>
                 {LEGEND_STOPS.map(v => <div key={v} style={{ width: 14, height: 14, background: perfColor(v), borderRadius: 2 }} />)}
                 <span>+10%</span>
@@ -904,13 +924,13 @@ export default function App() {
                   const val = d.price * shares;
                   const w = totalValue > 0 ? (val / totalValue) * 100 : 0;
                   return (
-                    <tr key={ticker} style={{ borderBottom: `1px solid #0f1520` }}>
+                    <tr key={ticker} style={{ borderBottom: `1px solid ${S.rowBorder}` }}>
                       <td style={{ padding: "9px 14px", fontWeight: 800, fontSize: 14 }}>{ticker}</td>
                       <td style={{ padding: "9px 14px", textAlign: "right" }}>${d.price.toFixed(2)}</td>
                       <td style={{ padding: "9px 14px", textAlign: "right", color: S.muted }}>{shares}</td>
                       <td style={{ padding: "9px 14px", textAlign: "right", fontWeight: 600 }}>${val.toLocaleString("en-US", { maximumFractionDigits: 0 })}</td>
                       <td style={{ padding: "9px 14px", textAlign: "right", color: S.muted }}>{w.toFixed(1)}%</td>
-                      <td style={{ padding: "9px 14px", textAlign: "right", color: d.today == null ? "#334155" : d.today >= 0 ? "#4ade80" : "#f87171", fontWeight: 600 }}>
+                      <td style={{ padding: "9px 14px", textAlign: "right", color: d.today == null ? S.subtext : d.today >= 0 ? S.green : "#f87171", fontWeight: 600 }}>
                         {d.today == null ? "—" : `${d.today >= 0 ? "+" : ""}${d.today.toFixed(2)}%`}
                       </td>
                     </tr>
@@ -934,7 +954,7 @@ export default function App() {
                 <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
                   {[
                     { label: "Current Value", value: `$${last.value.toLocaleString("en-US", { maximumFractionDigits: 0 })}` },
-                    { label: "Since First Record", value: `${totalChange >= 0 ? "+" : ""}${totalChange.toFixed(2)}%`, color: totalChange >= 0 ? "#4ade80" : "#f87171" },
+                    { label: "Since First Record", value: `${totalChange >= 0 ? "+" : ""}${totalChange.toFixed(2)}%`, color: totalChange >= 0 ? S.green : "#f87171" },
                     { label: "Tracking Since", value: new Date(first.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) },
                     { label: "Days Recorded", value: `${history.length}` },
                   ].map(s => (
@@ -971,7 +991,7 @@ export default function App() {
                   </span>
                 </div>
               </div>
-              <HistoryChart history={history} events={portfolioEvents} />
+              <HistoryChart history={history} events={portfolioEvents} S={S} />
             </div>
 
             {/* Portfolio changes list */}
@@ -982,8 +1002,8 @@ export default function App() {
                 </div>
                 <div style={{ maxHeight: 260, overflowY: "auto" }}>
                   {[...portfolioEvents].reverse().map((ev, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", borderBottom: `1px solid #0f1520` }}>
-                      <span style={{ fontSize: 15, fontWeight: 800, color: ev.type === "add" ? "#4ade80" : ev.type === "remove" ? "#f87171" : "#93c5fd", minWidth: 14 }}>
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", borderBottom: `1px solid ${S.rowBorder}` }}>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: ev.type === "add" ? S.green : ev.type === "remove" ? "#f87171" : S.link, minWidth: 14 }}>
                         {ev.type === "add" ? "+" : ev.type === "remove" ? "−" : "~"}
                       </span>
                       <span style={{ fontWeight: 700, fontSize: 13, minWidth: 56 }}>{ev.ticker}</span>
@@ -993,11 +1013,11 @@ export default function App() {
                           : `Updated: ${ev.prevShares} → ${ev.shares} shares`}
                       </span>
                       {ev.note && (
-                        <span style={{ fontSize: 11, color: "#64748b", fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }} title={ev.note}>
+                        <span style={{ fontSize: 11, color: S.muted, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }} title={ev.note}>
                           {ev.note}
                         </span>
                       )}
-                      <span style={{ marginLeft: "auto", fontSize: 11, color: "#475569", whiteSpace: "nowrap" }}>
+                      <span style={{ marginLeft: "auto", fontSize: 11, color: S.muted, whiteSpace: "nowrap" }}>
                         {new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })}
                       </span>
                     </div>
@@ -1016,7 +1036,7 @@ export default function App() {
                     localStorage.removeItem("ph_history");
                     localStorage.removeItem("ph_events");
                   }}
-                  style={{ fontSize: 12, color: "#475569", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                  style={{ fontSize: 12, color: S.muted, background: "none", border: "none", cursor: "pointer", padding: 0 }}
                 >
                   Clear all history data
                 </button>
@@ -1039,12 +1059,12 @@ export default function App() {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontWeight: 700, fontSize: 14, color: S.text }}>Powered by Finnhub</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, background: "#1d3a6e", color: "#93c5fd", padding: "2px 6px", borderRadius: 4 }}>FREE</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, background: S.badgeFreeBg, color: S.badgeFreeText, padding: "2px 6px", borderRadius: 4 }}>FREE</span>
                   </div>
                   <div style={{ fontSize: 12, color: S.muted, marginTop: 2 }}>Real-time quotes · Historical candle data · 60 req/min · No credit card needed</div>
                 </div>
                 <a href="https://finnhub.io/register" target="_blank" rel="noreferrer"
-                  style={{ fontSize: 12, fontWeight: 600, color: "#4ade80", textDecoration: "none", whiteSpace: "nowrap" }}>
+                  style={{ fontSize: 12, fontWeight: 600, color: S.green, textDecoration: "none", whiteSpace: "nowrap" }}>
                   Get free key →
                 </a>
               </div>
@@ -1054,16 +1074,16 @@ export default function App() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: S.text }}>Your API Key</div>
                   {apiKey
-                    ? <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.2)", padding: "2px 8px", borderRadius: 20 }}>✓ Active — using your own key</span>
-                    : <span style={{ fontSize: 11, fontWeight: 600, color: "#93c5fd", background: "rgba(147,197,253,0.08)", border: "1px solid rgba(147,197,253,0.15)", padding: "2px 8px", borderRadius: 20 }}>Using Karta's shared key</span>
+                    ? <span style={{ fontSize: 11, fontWeight: 700, color: S.green, background: S.greenDim, border: `1px solid ${S.green}33`, padding: "2px 8px", borderRadius: 20 }}>✓ Active — using your own key</span>
+                    : <span style={{ fontSize: 11, fontWeight: 600, color: S.link, background: `${S.link}14`, border: `1px solid ${S.link}26`, padding: "2px 8px", borderRadius: 20 }}>Using Karta's shared key</span>
                   }
                 </div>
                 {!apiKey && (
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px", borderRadius: 8, background: "rgba(147,197,253,0.06)", border: "1px solid rgba(147,197,253,0.14)", marginBottom: 10 }}>
                     <span style={{ fontSize: 15, lineHeight: 1 }}>ℹ️</span>
-                    <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.6 }}>
-                      Karta's <strong style={{ color: "#93c5fd" }}>shared key</strong> is active by default, but it's rate-limited — heavy traffic can temporarily pause refreshes.
-                      {" "}<strong style={{ color: "#e2e8f0" }}>Get your own free key</strong> for uninterrupted, unlimited access to your portfolio data.
+                    <div style={{ fontSize: 12, color: S.code, lineHeight: 1.6 }}>
+                      Karta's <strong style={{ color: S.link }}>shared key</strong> is active by default, but it's rate-limited — heavy traffic can temporarily pause refreshes.
+                      {" "}<strong style={{ color: S.strong }}>Get your own free key</strong> for uninterrupted, unlimited access to your portfolio data.
                     </div>
                   </div>
                 )}
@@ -1074,7 +1094,7 @@ export default function App() {
                     onChange={e => setApiInput(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") { setApiKey(apiInput); localStorage.setItem("ph_apikey", apiInput); setTab("heatmap"); setTimeout(() => fetchData(apiInput), 100); }}}
                     placeholder="Paste your Finnhub API key here…"
-                    style={{ flex: 1, padding: "8px 12px", borderRadius: 7, border: `1px solid ${S.border}`, background: S.bg, color: S.text, fontSize: 14, outline: "none" }}
+                    style={{ flex: 1, padding: "8px 12px", borderRadius: 7, border: `1px solid ${S.border}`, background: S.inputBg, color: S.text, fontSize: 14, outline: "none" }}
                   />
                   <button
                     onClick={() => { setApiKey(apiInput); localStorage.setItem("ph_apikey", apiInput); setTab("heatmap"); setTimeout(() => fetchData(apiInput), 100); }}
@@ -1084,7 +1104,7 @@ export default function App() {
                 </div>
                 <div style={{ fontSize: 12, color: S.muted, marginTop: 8 }}>
                   Your own key gives you unlimited refreshes and faster updates.
-                  Free at <a href="https://finnhub.io/register" target="_blank" rel="noreferrer" style={{ color: "#93c5fd" }}>finnhub.io/register</a> — takes 2 minutes.
+                  Free at <a href="https://finnhub.io/register" target="_blank" rel="noreferrer" style={{ color: S.link }}>finnhub.io/register</a> — takes 2 minutes.
                 </div>
               </div>
             </div>
@@ -1101,7 +1121,7 @@ export default function App() {
                     onChange={e => { setPortfolioName(e.target.value); localStorage.setItem("ph_name", e.target.value); }}
                     placeholder="Portfolio Heatmap"
                     maxLength={40}
-                    style={{ flex: 1, padding: "8px 12px", borderRadius: 7, border: `1px solid ${S.border}`, background: S.bg, color: S.text, fontSize: 14, fontWeight: 700, outline: "none" }}
+                    style={{ flex: 1, padding: "8px 12px", borderRadius: 7, border: `1px solid ${S.border}`, background: S.inputBg, color: S.text, fontSize: 14, fontWeight: 700, outline: "none" }}
                   />
                   <button
                     onClick={() => { setPortfolioName("Portfolio Heatmap"); localStorage.setItem("ph_name", "Portfolio Heatmap"); }}
@@ -1136,18 +1156,18 @@ export default function App() {
                 {/* Bulk import */}
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: S.muted, marginBottom: 6, letterSpacing: "0.04em" }}>
-                    BULK IMPORT &nbsp;—&nbsp; one per line: <span style={{ color: "#93c5fd", fontWeight: 700 }}>TICKER, SHARES</span>
+                    BULK IMPORT &nbsp;—&nbsp; one per line: <span style={{ color: S.link, fontWeight: 700 }}>TICKER, SHARES</span>
                   </div>
                   <textarea
                     value={bulkText}
                     onChange={e => { setBulkText(e.target.value); setBulkError(""); }}
                     placeholder={"AAPL, 50\nMSFT, 30\nNVDA, 40\nGOOGL, 20"}
                     rows={5}
-                    style={{ width: "100%", padding: "10px 12px", borderRadius: 7, border: `1px solid ${bulkError ? "#ef4444" : S.border}`, background: S.bg, color: S.text, fontSize: 13, fontFamily: "monospace", outline: "none", resize: "vertical", boxSizing: "border-box" }}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 7, border: `1px solid ${bulkError ? "#ef4444" : S.border}`, background: S.inputBg, color: S.text, fontSize: 13, fontFamily: "monospace", outline: "none", resize: "vertical", boxSizing: "border-box" }}
                   />
                   {bulkError && <div style={{ fontSize: 12, color: "#f87171", marginTop: 4 }}>⚠ {bulkError}</div>}
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-                    <button onClick={parseBulk} disabled={!bulkText.trim()} style={{ padding: "7px 16px", borderRadius: 6, border: "none", cursor: bulkText.trim() ? "pointer" : "not-allowed", background: "#16a34a", color: "#fff", fontSize: 13, fontWeight: 700, opacity: bulkText.trim() ? 1 : 0.45 }}>↑ Import</button>
+                    <button onClick={parseBulk} disabled={!bulkText.trim()} style={{ padding: "7px 16px", borderRadius: 6, border: "none", cursor: bulkText.trim() ? "pointer" : "not-allowed", background: S.green, color: "#fff", fontSize: 13, fontWeight: 700, opacity: bulkText.trim() ? 1 : 0.45 }}>↑ Import</button>
                     <button onClick={() => { setBulkText(""); setBulkError(""); }} style={{ padding: "7px 12px", borderRadius: 6, border: `1px solid ${S.border}`, cursor: "pointer", background: "transparent", color: S.muted, fontSize: 13 }}>Clear</button>
                     <span style={{ fontSize: 12, color: S.muted }}>Paste directly from Excel or Google Sheets</span>
                   </div>
@@ -1158,10 +1178,10 @@ export default function App() {
                   <div style={{ fontSize: 12, fontWeight: 600, color: S.muted, marginBottom: 8, letterSpacing: "0.04em" }}>ADD SINGLE STOCK</div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <input value={newTicker} onChange={e => setNewTicker(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && addStock()} placeholder="TICKER" maxLength={10}
-                      style={{ width: 90, padding: "7px 10px", borderRadius: 6, border: `1px solid ${S.border}`, background: S.bg, color: S.text, fontSize: 14, fontWeight: 700, outline: "none" }} />
+                      style={{ width: 90, padding: "7px 10px", borderRadius: 6, border: `1px solid ${S.border}`, background: S.inputBg, color: S.text, fontSize: 14, fontWeight: 700, outline: "none" }} />
                     <input type="number" value={newShares} onChange={e => setNewShares(e.target.value)} onKeyDown={e => e.key === "Enter" && addStock()} placeholder="Shares" min={0.001}
-                      style={{ width: 80, padding: "7px 10px", borderRadius: 6, border: `1px solid ${S.border}`, background: S.bg, color: S.text, fontSize: 14, outline: "none" }} />
-                    <button onClick={addStock} style={{ padding: "7px 14px", borderRadius: 6, border: "none", cursor: "pointer", background: "#16a34a", color: "#fff", fontSize: 14, fontWeight: 700 }}>+ Add</button>
+                      style={{ width: 80, padding: "7px 10px", borderRadius: 6, border: `1px solid ${S.border}`, background: S.inputBg, color: S.text, fontSize: 14, outline: "none" }} />
+                    <button onClick={addStock} style={{ padding: "7px 14px", borderRadius: 6, border: "none", cursor: "pointer", background: S.green, color: "#fff", fontSize: 14, fontWeight: 700 }}>+ Add</button>
                   </div>
                   <input
                     value={newNote}
@@ -1169,7 +1189,7 @@ export default function App() {
                     onKeyDown={e => e.key === "Enter" && addStock()}
                     placeholder="Note (optional) — e.g. earnings play, rebalance…"
                     maxLength={120}
-                    style={{ marginTop: 7, width: "100%", padding: "6px 10px", borderRadius: 6, border: `1px solid ${S.border}`, background: S.bg, color: "#94a3b8", fontSize: 12, outline: "none", boxSizing: "border-box" }}
+                    style={{ marginTop: 7, width: "100%", padding: "6px 10px", borderRadius: 6, border: `1px solid ${S.border}`, background: S.inputBg, color: S.muted, fontSize: 12, outline: "none", boxSizing: "border-box" }}
                   />
                 </div>
 
@@ -1186,10 +1206,10 @@ export default function App() {
                       <div key={ticker} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6, background: S.bg, border: `1px solid ${S.border}` }}>
                         <span style={{ fontWeight: 800, fontSize: 13 }}>{ticker}</span>
                         <span style={{ fontSize: 11, color: S.muted }}>{shares}sh</span>
-                        <button onClick={() => { recordPortfolioEvent("remove", ticker, shares); setPortfolio(portfolio.filter(p => p.ticker !== ticker)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#475569", fontSize: 15, padding: 0, lineHeight: 1 }}>×</button>
+                        <button onClick={() => { recordPortfolioEvent("remove", ticker, shares); setPortfolio(portfolio.filter(p => p.ticker !== ticker)); }} style={{ background: "none", border: "none", cursor: "pointer", color: S.muted, fontSize: 15, padding: 0, lineHeight: 1 }}>×</button>
                       </div>
                     ))}
-                    {!portfolio.length && <span style={{ fontSize: 13, color: "#334155" }}>No stocks added yet — use bulk import or add one above.</span>}
+                    {!portfolio.length && <span style={{ fontSize: 13, color: S.subtext }}>No stocks added yet — use bulk import or add one above.</span>}
                   </div>
                 </div>
 
