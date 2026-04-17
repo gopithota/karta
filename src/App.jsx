@@ -195,14 +195,20 @@ function HistoryChart({ history, events }) {
               {new Date(hovEvent.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
             </div>
             {hovEvent.evts.map((ev, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 5, fontSize: 12, fontWeight: 600,
-                color: ev.type === "add" ? "#4ade80" : ev.type === "remove" ? "#f87171" : "#93c5fd",
-                lineHeight: 1.7 }}>
-                <span style={{ fontWeight: 800 }}>{ev.type === "add" ? "+" : ev.type === "remove" ? "−" : "~"}</span>
-                <span>{ev.ticker}</span>
-                <span style={{ color: "#64748b", fontWeight: 400 }}>
-                  {ev.type === "update" ? `${ev.prevShares} → ${ev.shares}sh` : `${ev.shares}sh`}
-                </span>
+              <div key={i} style={{ lineHeight: 1.7 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 5, fontSize: 12, fontWeight: 600,
+                  color: ev.type === "add" ? "#4ade80" : ev.type === "remove" ? "#f87171" : "#93c5fd" }}>
+                  <span style={{ fontWeight: 800 }}>{ev.type === "add" ? "+" : ev.type === "remove" ? "−" : "~"}</span>
+                  <span>{ev.ticker}</span>
+                  <span style={{ color: "#64748b", fontWeight: 400 }}>
+                    {ev.type === "update" ? `${ev.prevShares} → ${ev.shares}sh` : `${ev.shares}sh`}
+                  </span>
+                </div>
+                {ev.note && (
+                  <div style={{ fontSize: 10, color: "#475569", fontStyle: "italic", marginTop: -2, maxWidth: 180, lineHeight: 1.4 }}>
+                    {ev.note}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -254,6 +260,7 @@ export default function App() {
   });
   const [newTicker,    setNewTicker]    = useState("");
   const [newShares,    setNewShares]    = useState("10");
+  const [newNote,      setNewNote]      = useState("");
   const [bulkText,     setBulkText]     = useState("");
   const [bulkError,    setBulkError]    = useState("");
   const [stockData,    setStockData]    = useState({});
@@ -517,12 +524,12 @@ export default function App() {
     }
     // Scatter 6 portfolio events on random weekdays
     const eventDefs = [
-      { type: "add",    ticker: "NVDA",  shares: 5  },
-      { type: "add",    ticker: "MSFT",  shares: 10 },
-      { type: "remove", ticker: "XOM",   shares: 20 },
-      { type: "update", ticker: "AAPL",  shares: 15, prevShares: 8 },
+      { type: "add",    ticker: "NVDA",  shares: 5,  note: "AI momentum, added on dip" },
+      { type: "add",    ticker: "MSFT",  shares: 10, note: "Rebalancing tech allocation" },
+      { type: "remove", ticker: "XOM",   shares: 20, note: "Rotating out of energy" },
+      { type: "update", ticker: "AAPL",  shares: 15, prevShares: 8, note: "Doubled down after earnings" },
       { type: "add",    ticker: "META",  shares: 3  },
-      { type: "remove", ticker: "F",     shares: 50 },
+      { type: "remove", ticker: "F",     shares: 50, note: "Cut losses, EV thesis failed" },
     ];
     const weekdays = demoHistory.map(h => h.date);
     // Space events evenly across the weekdays
@@ -539,7 +546,7 @@ export default function App() {
   }, []);
 
   // Record a portfolio change event (add / remove / update)
-  const recordPortfolioEvent = useCallback((type, ticker, shares, prevShares = null) => {
+  const recordPortfolioEvent = useCallback((type, ticker, shares, prevShares = null, note = null) => {
     if (isDemo) return;
     const now = new Date();
     const event = {
@@ -547,6 +554,7 @@ export default function App() {
       time: now.toTimeString().split(" ")[0],
       type, ticker, shares,
       ...(prevShares != null ? { prevShares } : {}),
+      ...(note ? { note } : {}),
     };
     setPortfolioEvents(prev => {
       const next = applyEvent(prev, event);
@@ -560,8 +568,8 @@ export default function App() {
     const s = parseFloat(newShares);
     if (!t || isNaN(s) || s <= 0 || portfolio.find(p => p.ticker === t)) return;
     setPortfolio([...portfolio, { ticker: t, shares: s }]);
-    setNewTicker(""); setNewShares("10");
-    recordPortfolioEvent("add", t, s);
+    recordPortfolioEvent("add", t, s, null, newNote.trim() || null);
+    setNewTicker(""); setNewShares("10"); setNewNote("");
   };
 
   const parseBulk = () => {
@@ -876,15 +884,15 @@ export default function App() {
         </div>
 
         {/* ━━━ TABLE ━━━ */}
-        <div style={{ position: "absolute", inset: 0, overflow: "auto", display: tab === "table" ? "block" : "none" }}>
+        <div style={{ position: "absolute", inset: 0, overflow: "auto", display: tab === "table" ? "block" : "none", padding: "20px" }}>
           {Object.keys(stockData).length === 0 ? (
             <div style={{ textAlign: "center", color: S.muted, padding: 48, fontSize: 14 }}>Load data using the Refresh button above.</div>
           ) : (
-            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
+            <div style={{ maxWidth: 1020, margin: "0 auto", overflowX: "auto", WebkitOverflowScrolling: "touch", background: S.panel, borderRadius: 10, border: `1px solid ${S.border}` }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
-                <tr style={{ borderBottom: `1px solid ${S.border}`, position: "sticky", top: 0, background: S.bg }}>
-                  {["Ticker", "Price", "Shares", "Value", "Weight", ...PERIODS.map(p => p.label)].map((h, i) => (
+                <tr style={{ borderBottom: `1px solid ${S.border}`, position: "sticky", top: 0, background: S.panel }}>
+                  {["Ticker", "Price", "Shares", "Value", "Weight", "Today"].map((h, i) => (
                     <th key={h} style={{ padding: "10px 14px", textAlign: i === 0 ? "left" : "right", color: S.muted, fontWeight: 600, fontSize: 12, letterSpacing: "0.03em", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -902,14 +910,9 @@ export default function App() {
                       <td style={{ padding: "9px 14px", textAlign: "right", color: S.muted }}>{shares}</td>
                       <td style={{ padding: "9px 14px", textAlign: "right", fontWeight: 600 }}>${val.toLocaleString("en-US", { maximumFractionDigits: 0 })}</td>
                       <td style={{ padding: "9px 14px", textAlign: "right", color: S.muted }}>{w.toFixed(1)}%</td>
-                      {PERIODS.map(p => {
-                        const v = d[p.key];
-                        return (
-                          <td key={p.key} style={{ padding: "9px 14px", textAlign: "right", color: v == null ? "#334155" : v >= 0 ? "#4ade80" : "#f87171" }}>
-                            {v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`}
-                          </td>
-                        );
-                      })}
+                      <td style={{ padding: "9px 14px", textAlign: "right", color: d.today == null ? "#334155" : d.today >= 0 ? "#4ade80" : "#f87171", fontWeight: 600 }}>
+                        {d.today == null ? "—" : `${d.today >= 0 ? "+" : ""}${d.today.toFixed(2)}%`}
+                      </td>
                     </tr>
                   );
                 })}
@@ -921,7 +924,7 @@ export default function App() {
 
         {/* ━━━ HISTORY ━━━ */}
         <div style={{ position: "absolute", inset: 0, overflow: "auto", display: tab === "history" ? "block" : "none", padding: 20 }}>
-          <div style={{ maxWidth: 860, margin: "0 auto" }}>
+          <div style={{ maxWidth: 1020, margin: "0 auto" }}>
 
             {/* Summary stat cards */}
             {history.length >= 2 && (() => {
@@ -989,7 +992,12 @@ export default function App() {
                           : ev.type === "remove" ? `Removed ${ev.shares} shares`
                           : `Updated: ${ev.prevShares} → ${ev.shares} shares`}
                       </span>
-                      <span style={{ marginLeft: "auto", fontSize: 11, color: "#334155", whiteSpace: "nowrap" }}>
+                      {ev.note && (
+                        <span style={{ fontSize: 11, color: "#64748b", fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }} title={ev.note}>
+                          {ev.note}
+                        </span>
+                      )}
+                      <span style={{ marginLeft: "auto", fontSize: 11, color: "#475569", whiteSpace: "nowrap" }}>
                         {new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })}
                       </span>
                     </div>
@@ -1155,6 +1163,14 @@ export default function App() {
                       style={{ width: 80, padding: "7px 10px", borderRadius: 6, border: `1px solid ${S.border}`, background: S.bg, color: S.text, fontSize: 14, outline: "none" }} />
                     <button onClick={addStock} style={{ padding: "7px 14px", borderRadius: 6, border: "none", cursor: "pointer", background: "#16a34a", color: "#fff", fontSize: 14, fontWeight: 700 }}>+ Add</button>
                   </div>
+                  <input
+                    value={newNote}
+                    onChange={e => setNewNote(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && addStock()}
+                    placeholder="Note (optional) — e.g. earnings play, rebalance…"
+                    maxLength={120}
+                    style={{ marginTop: 7, width: "100%", padding: "6px 10px", borderRadius: 6, border: `1px solid ${S.border}`, background: S.bg, color: "#94a3b8", fontSize: 12, outline: "none", boxSizing: "border-box" }}
+                  />
                 </div>
 
                 {/* Holdings */}

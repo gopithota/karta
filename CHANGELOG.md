@@ -1,5 +1,27 @@
 # Karta — Changelog
 
+## v0.4.0 — 2026-04-16
+
+### Event Annotations & Table Polish
+
+**Notes / annotations on portfolio events**
+- Optional free-text note field in Setup → Add Single Stock (up to 120 chars)
+- Notes are stored alongside the event in `localStorage` (`ph_events`)
+- Displayed as small italic text in the History tab's Portfolio Changes log
+- Shown in the chart's event bubble tooltip on hover, beneath the ticker/shares line
+- Demo history seeded with realistic sample notes for immediate preview
+
+**Table view improvements**
+- Removed historical period columns (YTD, 3M, 6M, 1Y, 5Y) — data was not populated
+- Kept Today's % change column (green/red, same logic as heatmap)
+- Table now renders as a centered card with rounded corners and a border
+
+**History tab improvements**
+- Slightly lightened date and note colors in the Portfolio Changes log for better readability
+- Consistent `maxWidth` across History and Table tabs for a unified layout
+
+---
+
 ## v0.3.1 — 2026-04-15
 
 ### Patch
