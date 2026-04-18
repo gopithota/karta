@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { computeTreemap, perfColor, IS_DEMO, applySnapshot, applyEvent } from "./utils.js";
 import { THEMES, SWATCHES, useTheme } from "./theme.js";
+import SmartInput from "./SmartInput.jsx";
 
 const LEGEND_STOPS = [-10, -7, -4, -2, -1, 0, 1, 2, 4, 7, 10];
 
@@ -264,11 +265,9 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem("ph_portfolio")) || DEFAULT_PORTFOLIO; }
     catch { return DEFAULT_PORTFOLIO; }
   });
-  const [newTicker,    setNewTicker]    = useState("");
-  const [newShares,    setNewShares]    = useState("10");
-  const [newNote,      setNewNote]      = useState("");
-  const [bulkText,     setBulkText]     = useState("");
-  const [bulkError,    setBulkError]    = useState("");
+  const [editingEventIdx,  setEditingEventIdx]  = useState(null);
+  const [editingNote,      setEditingNote]      = useState("");
+  const [hoveredEventIdx,  setHoveredEventIdx]  = useState(null);
   const [stockData,    setStockData]    = useState({});
   const [loading,      setLoading]      = useState(false);
   const [fetchErrors,  setFetchErrors]  = useState({});
@@ -569,47 +568,39 @@ export default function App() {
     });
   }, [isDemo]);
 
-  const addStock = () => {
-    const t = newTicker.trim().toUpperCase();
-    const s = parseFloat(newShares);
-    if (!t || isNaN(s) || s <= 0 || portfolio.find(p => p.ticker === t)) return;
-    setPortfolio([...portfolio, { ticker: t, shares: s }]);
-    recordPortfolioEvent("add", t, s, null, newNote.trim() || null);
-    setNewTicker(""); setNewShares("10"); setNewNote("");
-  };
+  const saveEventNote = useCallback((idx, noteText) => {
+    setPortfolioEvents(prev => {
+      const next = prev.map((ev, i) => {
+        if (i !== idx) return ev;
+        const trimmed = noteText.trim();
+        const updated = { ...ev };
+        if (trimmed) updated.note = trimmed;
+        else delete updated.note;
+        return updated;
+      });
+      localStorage.setItem("ph_events", JSON.stringify(next));
+      return next;
+    });
+    setEditingEventIdx(null);
+    setHoveredEventIdx(null);
+  }, []);
 
-  const parseBulk = () => {
-    setBulkError("");
-    const lines = bulkText.split("\n").map(l => l.trim()).filter(Boolean);
-    const parsed = [], errors = [];
-    for (const line of lines) {
-      const parts = line.split(/[\s,\t]+/).filter(Boolean);
-      if (parts.length < 2) { errors.push(`"${line}" — need ticker and shares`); continue; }
-      const ticker = parts[0].toUpperCase();
-      const shares = parseFloat(parts[1]);
-      if (!/^[A-Z.\-]{1,10}$/.test(ticker)) { errors.push(`"${ticker}" — invalid ticker`); continue; }
-      if (isNaN(shares) || shares <= 0) { errors.push(`"${ticker}" — invalid shares`); continue; }
-      if (parsed.find(p => p.ticker === ticker)) continue;
-      parsed.push({ ticker, shares });
-    }
-    if (errors.length) { setBulkError(errors.join(" · ")); return; }
-    if (!parsed.length) { setBulkError("Nothing to import — check the format."); return; }
-    const merged = [...portfolio];
-    const eventsToRecord = [];
-    for (const p of parsed) {
-      const idx = merged.findIndex(m => m.ticker === p.ticker);
-      if (idx >= 0) {
-        if (merged[idx].shares !== p.shares) eventsToRecord.push({ type: "update", ticker: p.ticker, shares: p.shares, prevShares: merged[idx].shares });
-        merged[idx] = p;
-      } else {
-        merged.push(p);
-        eventsToRecord.push({ type: "add", ticker: p.ticker, shares: p.shares });
+  const handleSmartApply = useCallback((mutations) => {
+    let next = [...portfolio];
+    for (const m of mutations) {
+      if (m.type === "create") {
+        next = [...next, { ticker: m.ticker, shares: m.shares }];
+        recordPortfolioEvent("add", m.ticker, m.shares);
+      } else if (m.type === "update") {
+        next = next.map(p => p.ticker === m.ticker ? { ...p, shares: m.shares } : p);
+        recordPortfolioEvent("update", m.ticker, m.shares, m.prevShares);
+      } else if (m.type === "remove") {
+        next = next.filter(p => p.ticker !== m.ticker);
+        recordPortfolioEvent("remove", m.ticker, m.prevShares);
       }
     }
-    setPortfolio(merged);
-    setBulkText("");
-    eventsToRecord.forEach(e => recordPortfolioEvent(e.type, e.ticker, e.shares, e.prevShares ?? null));
-  };
+    setPortfolio(next);
+  }, [portfolio, recordPortfolioEvent]);
 
   const btnBase = (active) => ({
     padding: "5px 13px", borderRadius: 6,
@@ -720,21 +711,6 @@ export default function App() {
               {isMobile ? short : label}
             </button>
           ))}
-          <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", borderRadius: 8, border: `1px solid ${S.border}`, background: S.panel }}>
-            {SWATCHES.map(sw => (
-              <button
-                key={sw.key}
-                onClick={() => setTheme(sw.key)}
-                title={sw.label}
-                style={{
-                  width: 14, height: 14, borderRadius: "50%", border: theme === sw.key ? `2px solid ${S.green}` : "2px solid transparent",
-                  background: sw.dot, cursor: "pointer", padding: 0, outline: "none", flexShrink: 0,
-                  boxShadow: theme === sw.key ? `0 0 0 1px ${S.green}44` : "none",
-                  transition: "border-color 0.15s, box-shadow 0.15s",
-                }}
-              />
-            ))}
-          </div>
         </div>
       </div>
 
@@ -1001,27 +977,78 @@ export default function App() {
                   Portfolio Changes ({portfolioEvents.length})
                 </div>
                 <div style={{ maxHeight: 260, overflowY: "auto" }}>
-                  {[...portfolioEvents].reverse().map((ev, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", borderBottom: `1px solid ${S.rowBorder}` }}>
-                      <span style={{ fontSize: 15, fontWeight: 800, color: ev.type === "add" ? S.green : ev.type === "remove" ? "#f87171" : S.link, minWidth: 14 }}>
-                        {ev.type === "add" ? "+" : ev.type === "remove" ? "−" : "~"}
-                      </span>
-                      <span style={{ fontWeight: 700, fontSize: 13, minWidth: 56 }}>{ev.ticker}</span>
-                      <span style={{ fontSize: 12, color: S.muted }}>
-                        {ev.type === "add"    ? `Added ${ev.shares} shares`
-                          : ev.type === "remove" ? `Removed ${ev.shares} shares`
-                          : `Updated: ${ev.prevShares} → ${ev.shares} shares`}
-                      </span>
-                      {ev.note && (
-                        <span style={{ fontSize: 11, color: S.muted, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }} title={ev.note}>
-                          {ev.note}
+                  {[...portfolioEvents].reverse().map((ev, i) => {
+                    const origIdx = portfolioEvents.length - 1 - i;
+                    const isEditing = editingEventIdx === origIdx;
+                    const isHovered = hoveredEventIdx === origIdx;
+                    return (
+                      <div
+                        key={i}
+                        style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", borderBottom: `1px solid ${S.rowBorder}`, background: isEditing ? S.bg : "transparent", transition: "background 0.12s" }}
+                        onMouseEnter={() => setHoveredEventIdx(origIdx)}
+                        onMouseLeave={() => setHoveredEventIdx(null)}
+                      >
+                        <span style={{ fontSize: 15, fontWeight: 800, color: ev.type === "add" ? S.green : ev.type === "remove" ? "#f87171" : S.link, minWidth: 14 }}>
+                          {ev.type === "add" ? "+" : ev.type === "remove" ? "−" : "~"}
                         </span>
-                      )}
-                      <span style={{ marginLeft: "auto", fontSize: 11, color: S.muted, whiteSpace: "nowrap" }}>
-                        {new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })}
-                      </span>
-                    </div>
-                  ))}
+                        <span style={{ fontWeight: 700, fontSize: 13, minWidth: 56 }}>{ev.ticker}</span>
+                        <span style={{ fontSize: 12, color: S.muted, whiteSpace: "nowrap" }}>
+                          {ev.type === "add"    ? `Added ${ev.shares} shares`
+                            : ev.type === "remove" ? `Removed ${ev.shares} shares`
+                            : `Updated: ${ev.prevShares} → ${ev.shares} shares`}
+                        </span>
+
+                        {/* Note — static text or inline edit input */}
+                        {isEditing ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 5, flex: 1, minWidth: 0 }}>
+                            <input
+                              autoFocus
+                              value={editingNote}
+                              onChange={e => setEditingNote(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === "Enter") saveEventNote(origIdx, editingNote);
+                                if (e.key === "Escape") { setEditingEventIdx(null); }
+                              }}
+                              placeholder="Add a note…"
+                              maxLength={160}
+                              style={{ flex: 1, minWidth: 0, padding: "3px 8px", borderRadius: 5, border: `1px solid ${S.green}55`, background: S.inputBg, color: S.text, fontSize: 12, outline: "none", fontStyle: "italic" }}
+                            />
+                            <button
+                              onClick={() => saveEventNote(origIdx, editingNote)}
+                              title="Save (Enter)"
+                              style={{ background: "none", border: "none", cursor: "pointer", color: S.green, fontSize: 15, padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
+                            >✓</button>
+                            <button
+                              onClick={() => setEditingEventIdx(null)}
+                              title="Cancel (Esc)"
+                              style={{ background: "none", border: "none", cursor: "pointer", color: S.muted, fontSize: 13, padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
+                            >✕</button>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", alignItems: "center", gap: 5, flex: 1, minWidth: 0 }}>
+                            <span
+                              onClick={() => { setEditingEventIdx(origIdx); setEditingNote(ev.note || ""); }}
+                              title={ev.note || "Click to add note"}
+                              style={{ fontSize: 11, color: ev.note ? S.muted : S.subtext, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: isHovered ? "text" : "default", opacity: ev.note ? 1 : isHovered ? 0.6 : 0, transition: "opacity 0.15s" }}
+                            >
+                              {ev.note || "add note…"}
+                            </span>
+                            {isHovered && (
+                              <button
+                                onClick={() => { setEditingEventIdx(origIdx); setEditingNote(ev.note || ""); }}
+                                title="Edit note"
+                                style={{ background: "none", border: "none", cursor: "pointer", color: S.emphasis, fontSize: 13, padding: "0 2px", lineHeight: 1, flexShrink: 0, opacity: 0.75, transform: "scaleX(-1)", display: "inline-block" }}
+                              >✎</button>
+                            )}
+                          </div>
+                        )}
+
+                        <span style={{ fontSize: 11, color: S.muted, whiteSpace: "nowrap", flexShrink: 0 }}>
+                          {new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1048,10 +1075,13 @@ export default function App() {
 
         {/* ━━━ SETUP ━━━ */}
         <div style={{ position: "absolute", inset: 0, overflow: "auto", display: tab === "setup" ? "block" : "none", padding: 20 }}>
-          <div style={{ maxWidth: 620, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ maxWidth: 1020, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 220px", gap: 16, alignItems: "start" }}>
+
+            {/* ── Left column: Data source + Portfolio ── */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
             {/* ── Card 1: Data source ── */}
-            <div style={{ background: S.panel, borderRadius: 10, border: `1px solid ${S.border}`, overflow: "hidden" }}>
+            <div style={{ background: S.panel, borderRadius: 10, border: `1px solid ${S.border}`, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.12)" }}>
 
               {/* Finnhub attribution header */}
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderBottom: `1px solid ${S.border}` }}>
@@ -1110,7 +1140,7 @@ export default function App() {
             </div>
 
             {/* ── Card 2: Portfolio ── */}
-            <div style={{ background: S.panel, borderRadius: 10, border: `1px solid ${S.border}`, overflow: "hidden" }}>
+            <div style={{ background: S.panel, borderRadius: 10, border: `1px solid ${S.border}`, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.12)" }}>
 
               {/* Header row with title editor */}
               <div style={{ padding: "14px 20px", borderBottom: `1px solid ${S.border}` }}>
@@ -1153,43 +1183,13 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Bulk import */}
+                {/* Smart input */}
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: S.muted, marginBottom: 6, letterSpacing: "0.04em" }}>
-                    BULK IMPORT &nbsp;—&nbsp; one per line: <span style={{ color: S.link, fontWeight: 700 }}>TICKER, SHARES</span>
-                  </div>
-                  <textarea
-                    value={bulkText}
-                    onChange={e => { setBulkText(e.target.value); setBulkError(""); }}
-                    placeholder={"AAPL, 50\nMSFT, 30\nNVDA, 40\nGOOGL, 20"}
-                    rows={5}
-                    style={{ width: "100%", padding: "10px 12px", borderRadius: 7, border: `1px solid ${bulkError ? "#ef4444" : S.border}`, background: S.inputBg, color: S.text, fontSize: 13, fontFamily: "monospace", outline: "none", resize: "vertical", boxSizing: "border-box" }}
-                  />
-                  {bulkError && <div style={{ fontSize: 12, color: "#f87171", marginTop: 4 }}>⚠ {bulkError}</div>}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-                    <button onClick={parseBulk} disabled={!bulkText.trim()} style={{ padding: "7px 16px", borderRadius: 6, border: "none", cursor: bulkText.trim() ? "pointer" : "not-allowed", background: S.green, color: "#fff", fontSize: 13, fontWeight: 700, opacity: bulkText.trim() ? 1 : 0.45 }}>↑ Import</button>
-                    <button onClick={() => { setBulkText(""); setBulkError(""); }} style={{ padding: "7px 12px", borderRadius: 6, border: `1px solid ${S.border}`, cursor: "pointer", background: "transparent", color: S.muted, fontSize: 13 }}>Clear</button>
-                    <span style={{ fontSize: 12, color: S.muted }}>Paste directly from Excel or Google Sheets</span>
-                  </div>
-                </div>
-
-                {/* Single add */}
-                <div style={{ borderTop: `1px solid ${S.border}`, paddingTop: 16, marginBottom: 20 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: S.muted, marginBottom: 8, letterSpacing: "0.04em" }}>ADD SINGLE STOCK</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input value={newTicker} onChange={e => setNewTicker(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && addStock()} placeholder="TICKER" maxLength={10}
-                      style={{ width: 90, padding: "7px 10px", borderRadius: 6, border: `1px solid ${S.border}`, background: S.inputBg, color: S.text, fontSize: 14, fontWeight: 700, outline: "none" }} />
-                    <input type="number" value={newShares} onChange={e => setNewShares(e.target.value)} onKeyDown={e => e.key === "Enter" && addStock()} placeholder="Shares" min={0.001}
-                      style={{ width: 80, padding: "7px 10px", borderRadius: 6, border: `1px solid ${S.border}`, background: S.inputBg, color: S.text, fontSize: 14, outline: "none" }} />
-                    <button onClick={addStock} style={{ padding: "7px 14px", borderRadius: 6, border: "none", cursor: "pointer", background: S.green, color: "#fff", fontSize: 14, fontWeight: 700 }}>+ Add</button>
-                  </div>
-                  <input
-                    value={newNote}
-                    onChange={e => setNewNote(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && addStock()}
-                    placeholder="Note (optional) — e.g. earnings play, rebalance…"
-                    maxLength={120}
-                    style={{ marginTop: 7, width: "100%", padding: "6px 10px", borderRadius: 6, border: `1px solid ${S.border}`, background: S.inputBg, color: S.muted, fontSize: 12, outline: "none", boxSizing: "border-box" }}
+                  <SmartInput
+                    portfolio={portfolio}
+                    onApply={handleSmartApply}
+                    S={S}
+                    isMobile={isMobile}
                   />
                 </div>
 
@@ -1213,6 +1213,35 @@ export default function App() {
                   </div>
                 </div>
 
+              </div>
+            </div>
+
+            </div>{/* end left column */}
+
+            {/* ── Card 3: Appearance (right column) ── */}
+            <div style={{ background: S.panel, borderRadius: 10, border: `1px solid ${S.border}`, boxShadow: "0 2px 12px rgba(0,0,0,0.12)" }}>
+              <div style={{ padding: "14px 20px", borderBottom: `1px solid ${S.border}` }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: S.muted, letterSpacing: "0.04em" }}>APPEARANCE</div>
+              </div>
+              <div style={{ padding: "16px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                {SWATCHES.map(sw => (
+                  <button
+                    key={sw.key}
+                    onClick={() => setTheme(sw.key)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 12,
+                      padding: "10px 14px", borderRadius: 8, cursor: "pointer",
+                      border: theme === sw.key ? `2px solid ${S.green}` : `2px solid ${S.border}`,
+                      background: theme === sw.key ? S.greenDim : S.bg,
+                      boxShadow: theme === sw.key ? `0 0 0 1px ${S.green}33` : "none",
+                      transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
+                    }}
+                  >
+                    <div style={{ width: 22, height: 22, borderRadius: "50%", background: sw.dot, flexShrink: 0, boxShadow: "0 1px 4px rgba(0,0,0,0.25)" }} />
+                    <span style={{ fontSize: 13, fontWeight: theme === sw.key ? 700 : 500, color: theme === sw.key ? S.green : S.muted }}>{sw.label}</span>
+                    {theme === sw.key && <span style={{ marginLeft: "auto", fontSize: 13, color: S.green }}>✓</span>}
+                  </button>
+                ))}
               </div>
             </div>
 

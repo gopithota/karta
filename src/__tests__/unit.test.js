@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { computeTreemap, perfColor, IS_DEMO, applySnapshot, applyEvent } from "../utils.js";
 import { THEMES, SWATCHES, useTheme } from "../theme.js";
+import { parseLine, applyAll } from "../SmartInput.jsx";
 
 // ─── computeTreemap ───────────────────────────────────────────────
 describe("computeTreemap", () => {
@@ -274,5 +275,149 @@ describe("applyEvent", () => {
     const newEvent = { date: "2026-04-15", type: "remove", ticker: "NEW", shares: 5 };
     const result = applyEvent([recentEvent], newEvent);
     expect(result).toHaveLength(2);
+  });
+});
+
+// ─── parseLine ────────────────────────────────────────────────────
+describe("parseLine", () => {
+  test("blank / whitespace-only lines return null", () => {
+    expect(parseLine("")).toBeNull();
+    expect(parseLine("   ")).toBeNull();
+  });
+
+  test("bare TICKER COUNT → set op", () => {
+    const r = parseLine("AAPL 50");
+    expect(r).toMatchObject({ op: "set", ticker: "AAPL", count: 50 });
+  });
+
+  test("ticker is uppercased and non-alpha chars stripped", () => {
+    expect(parseLine("aapl 10")).toMatchObject({ ticker: "AAPL" });
+    expect(parseLine("BRK.B 5")).toMatchObject({ ticker: "BRKB" });
+  });
+
+  test("count strips commas before parsing", () => {
+    expect(parseLine("AAPL 1,000")).toMatchObject({ count: 1000 });
+  });
+
+  test("add keyword words → add op", () => {
+    for (const kw of ["add", "added", "bought", "buy", "plus"]) {
+      expect(parseLine(`${kw} NVDA 10`)).toMatchObject({ op: "add" });
+    }
+  });
+
+  test("subtract keyword words → sub op", () => {
+    for (const kw of ["sold", "sell", "drop", "dropped", "remove", "removed", "minus"]) {
+      expect(parseLine(`${kw} MSFT 5`)).toMatchObject({ op: "sub" });
+    }
+  });
+
+  test("+ prefix (no space) → add op", () => {
+    expect(parseLine("+AAPL 10")).toMatchObject({ op: "add", ticker: "AAPL", count: 10 });
+  });
+
+  test("- prefix (no space) → sub op", () => {
+    expect(parseLine("-MSFT 5")).toMatchObject({ op: "sub", ticker: "MSFT", count: 5 });
+  });
+
+  test("+ and - with space → add/sub op", () => {
+    expect(parseLine("+ AAPL 10")).toMatchObject({ op: "add" });
+    expect(parseLine("- MSFT 5")).toMatchObject({ op: "sub" });
+  });
+
+  test("keyword is case-insensitive", () => {
+    expect(parseLine("ADD AAPL 5")).toMatchObject({ op: "add" });
+    expect(parseLine("SOLD AAPL 5")).toMatchObject({ op: "sub" });
+  });
+
+  test("missing count → error", () => {
+    expect(parseLine("AAPL")).toMatchObject({ error: "needs ticker and count" });
+    expect(parseLine("add NVDA")).toMatchObject({ error: "needs ticker and count" });
+  });
+
+  test("non-numeric count → error", () => {
+    expect(parseLine("AAPL foo")).toMatchObject({ error: "cannot parse" });
+  });
+
+  test("reversed COUNT TICKER order is auto-detected and parsed correctly", () => {
+    expect(parseLine("sold 8 META")).toMatchObject({ op: "sub", ticker: "META", count: 8 });
+    expect(parseLine("drop 6 NVDA")).toMatchObject({ op: "sub", ticker: "NVDA", count: 6 });
+    expect(parseLine("add 10 AAPL")).toMatchObject({ op: "add", ticker: "AAPL", count: 10 });
+    expect(parseLine("50 MSFT")).toMatchObject({ op: "set", ticker: "MSFT", count: 50 });
+  });
+
+  test("raw field is always the original trimmed line", () => {
+    expect(parseLine("  add AAPL 10  ").raw).toBe("add AAPL 10");
+  });
+});
+
+// ─── applyAll ────────────────────────────────────────────────────
+describe("applyAll", () => {
+  const current = { AAPL: 50, MSFT: 30 };
+
+  test("set on existing ticker updates shares", () => {
+    const { next, touched } = applyAll([parseLine("AAPL 100")], current);
+    expect(next.AAPL).toBe(100);
+    expect(touched.AAPL).toMatchObject({ before: 50, after: 100, op: "set" });
+  });
+
+  test("set on new ticker creates it", () => {
+    const { next, touched } = applyAll([parseLine("NVDA 25")], current);
+    expect(next.NVDA).toBe(25);
+    expect(touched.NVDA).toMatchObject({ before: undefined, after: 25 });
+  });
+
+  test("add increments an existing ticker", () => {
+    const { next } = applyAll([parseLine("add AAPL 10")], current);
+    expect(next.AAPL).toBe(60);
+  });
+
+  test("add on new ticker creates it", () => {
+    const { next } = applyAll([parseLine("add TSLA 15")], current);
+    expect(next.TSLA).toBe(15);
+  });
+
+  test("sub decrements an existing ticker", () => {
+    const { next, touched } = applyAll([parseLine("sold AAPL 20")], current);
+    expect(next.AAPL).toBe(30);
+    expect(touched.AAPL.after).toBe(30);
+  });
+
+  test("sub clamped to 0 removes the ticker from next", () => {
+    const { next, touched } = applyAll([parseLine("sold AAPL 999")], current);
+    expect(next.AAPL).toBeUndefined();
+    expect(touched.AAPL.after).toBe(0);
+  });
+
+  test("sub on ticker not in portfolio adds a semantic error", () => {
+    const { errors, touched } = applyAll([parseLine("sold TSLA 10")], current);
+    expect(errors.length).toBe(1);
+    expect(errors[0].error).toBe("not in portfolio");
+    expect("TSLA" in touched).toBe(false);
+  });
+
+  test("parse errors in the list are collected in errors, not applied", () => {
+    const lines = [parseLine("BADLINE"), parseLine("AAPL 100")];
+    const { next, errors } = applyAll(lines, current);
+    expect(errors).toHaveLength(1);
+    expect(next.AAPL).toBe(100); // valid command still applied
+  });
+
+  test("multiple commands applied in sequence (order matters)", () => {
+    const lines = [parseLine("AAPL 100"), parseLine("add AAPL 10")];
+    const { next } = applyAll(lines, current);
+    expect(next.AAPL).toBe(110); // set to 100, then add 10
+  });
+
+  test("set to same value ends up as noop in touched (before === after)", () => {
+    const { touched } = applyAll([parseLine("AAPL 50")], current);
+    expect(touched.AAPL.before).toBe(50);
+    expect(touched.AAPL.after).toBe(50);
+  });
+
+  test("empty list returns a copy of currentMap with no mutations", () => {
+    const { next, touched, errors } = applyAll([], current);
+    expect(next).toEqual(current);
+    expect(Object.keys(touched)).toHaveLength(0);
+    expect(errors).toHaveLength(0);
   });
 });

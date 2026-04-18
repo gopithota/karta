@@ -302,11 +302,6 @@ export default function Landing() {
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {!isMobile && <>
-            <a href="https://github.com/gopithota/karta" target="_blank" rel="noreferrer"
-              style={{ padding: "5px 14px", borderRadius: 8, border: `1px solid ${S.border}`, color: S.muted, fontSize: 12, textDecoration: "none", transition: "all 0.2s" }}
-              onMouseEnter={e => { e.currentTarget.style.color = S.text; e.currentTarget.style.borderColor = S.emphasis; }}
-              onMouseLeave={e => { e.currentTarget.style.color = S.muted; e.currentTarget.style.borderColor = S.border; }}
-            >GitHub</a>
             <a href="https://buymeacoffee.com/karta" target="_blank" rel="noreferrer"
               style={{ padding: "5px 14px", borderRadius: 8, border: `1px solid ${coffeeBorder}`, color: coffeeText, fontSize: 12, textDecoration: "none", transition: "all 0.2s" }}
               onMouseEnter={e => { e.currentTarget.style.background = coffeeHoverBg; e.currentTarget.style.borderColor = coffeeHoverBorder; }}
@@ -489,7 +484,7 @@ export default function Landing() {
               { icon: "💾", title: "Stored in your browser only", desc: "Your tickers, share counts, and API key are saved in your browser's localStorage — the same place bookmarks and preferences live. Only you can read it." },
               { icon: "🚫", title: "No account, no database", desc: "Karta has no user database. There is no server storing your holdings because there is no server involved in the heatmap at all." },
               { icon: "📡", title: "API calls go browser → Finnhub", desc: "Stock price requests go directly from your browser to Finnhub. They never touch our servers. We never see which stocks you looked up." },
-              { icon: "👁", title: "Open source — verify it yourself", desc: "The entire codebase is public on GitHub. You can read every line, run it locally, and confirm nothing is being sent anywhere." },
+              { icon: "👁", title: "Fully auditable in your browser", desc: "Open your browser's network tab and watch the traffic yourself. Every request goes directly to Finnhub — nothing passes through our servers." },
             ].map(item => (
               <div key={item.title} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <div style={{ fontSize: 22 }}>{item.icon}</div>
@@ -569,7 +564,7 @@ export default function Landing() {
             Chart your portfolio.
           </h2>
           <p style={{ color: S.muted, fontSize: 15, maxWidth: 420, margin: "0 auto 36px", lineHeight: 1.7 }}>
-            Free and open source. No account. No tracking.<br />Your data never leaves your browser.
+            No account. No tracking.<br />Your data never leaves your browser.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <a href="/app" style={{ padding: "14px 36px", borderRadius: 10, background: "linear-gradient(135deg, #4ade80, #16a34a)", color: "#051a0a", fontSize: 15, fontWeight: 800, textDecoration: "none", boxShadow: "0 0 40px rgba(74,222,128,0.18)", transition: "transform 0.2s" }}
@@ -589,10 +584,10 @@ export default function Landing() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <KartaLogo size={22} />
           <span style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 15, color: S.text }}>Karta</span>
-          <span style={{ color: S.muted, fontSize: 12 }}>— free & open source</span>
+          <span style={{ color: S.muted, fontSize: 12 }}>— portfolio heatmap</span>
         </div>
         <div style={{ display: "flex", gap: 20 }}>
-          {[["GitHub","https://github.com/gopithota/karta"],["Finnhub","https://finnhub.io"],["Buy me a coffee","https://buymeacoffee.com/karta"]].map(([label, href]) => (
+          {[["Finnhub","https://finnhub.io"],["Buy me a coffee","https://buymeacoffee.com/karta"]].map(([label, href]) => (
             <a key={label} href={href} target="_blank" rel="noreferrer"
               style={{ fontSize: 12, color: S.muted, textDecoration: "none", transition: "color 0.2s" }}
               onMouseEnter={e => e.currentTarget.style.color = S.text}

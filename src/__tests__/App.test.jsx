@@ -12,6 +12,7 @@ function setup() {
 
 // Convenience: parsed ph_portfolio from localStorage
 const savedPortfolio = () => JSON.parse(localStorage.getItem("ph_portfolio") ?? "[]");
+const savedEvents    = () => JSON.parse(localStorage.getItem("ph_events")    ?? "[]");
 
 // ─── Initial render ───────────────────────────────────────────────
 describe("initial render", () => {
@@ -95,70 +96,102 @@ describe("portfolio management", () => {
     await user.click(screen.getByRole("button", { name: /clear demo/i }));
   }
 
+  // Helper: type into SmartInput textarea and apply
+  async function smartAdd(user, text) {
+    const ta = screen.getByPlaceholderText(/AAPL 100/);
+    await user.clear(ta);
+    await user.type(ta, text);
+    await user.click(screen.getByRole("button", { name: /apply changes/i }));
+  }
+
   test("adding a stock persists it to localStorage", async () => {
     const user = setup();
     await openSetupFresh(user);
-    await user.type(screen.getByPlaceholderText("TICKER"), "GOOG");
-    await user.click(screen.getByRole("button", { name: /\+ add/i }));
+    await smartAdd(user, "GOOG 10");
     expect(savedPortfolio().some(p => p.ticker === "GOOG")).toBe(true);
   });
 
-  test("adding a stock with custom share count saves correctly", async () => {
+  test("adding a stock with a custom share count saves correctly", async () => {
     const user = setup();
     await openSetupFresh(user);
-    await user.type(screen.getByPlaceholderText("TICKER"), "NVDA");
-    await user.clear(screen.getByPlaceholderText("Shares"));
-    await user.type(screen.getByPlaceholderText("Shares"), "25");
-    await user.click(screen.getByRole("button", { name: /\+ add/i }));
+    await smartAdd(user, "NVDA 25");
     const entry = savedPortfolio().find(p => p.ticker === "NVDA");
     expect(entry).toBeDefined();
     expect(entry.shares).toBe(25);
   });
 
-  test("duplicate ticker is silently rejected — only one entry in portfolio", async () => {
+  test("set command on existing ticker updates shares (one entry in portfolio)", async () => {
     const user = setup();
     await openSetupFresh(user);
-    await user.type(screen.getByPlaceholderText("TICKER"), "AAPL");
-    await user.click(screen.getByRole("button", { name: /\+ add/i }));
-    // Try adding AAPL again
-    await user.type(screen.getByPlaceholderText("TICKER"), "AAPL");
-    await user.click(screen.getByRole("button", { name: /\+ add/i }));
+    await smartAdd(user, "AAPL 50");
+    await smartAdd(user, "AAPL 100"); // set, not duplicate-reject
     expect(savedPortfolio().filter(p => p.ticker === "AAPL")).toHaveLength(1);
+    expect(savedPortfolio().find(p => p.ticker === "AAPL").shares).toBe(100);
   });
 
-  test("removing a stock removes it from localStorage", async () => {
+  test("add command increments shares on an existing ticker", async () => {
     const user = setup();
     await openSetupFresh(user);
-    await user.type(screen.getByPlaceholderText("TICKER"), "TSLA");
-    await user.click(screen.getByRole("button", { name: /\+ add/i }));
+    await smartAdd(user, "AAPL 50");
+    await smartAdd(user, "add AAPL 20");
+    expect(savedPortfolio().find(p => p.ticker === "AAPL").shares).toBe(70);
+  });
+
+  test("sold command decrements shares on an existing ticker", async () => {
+    const user = setup();
+    await openSetupFresh(user);
+    await smartAdd(user, "AAPL 50");
+    await smartAdd(user, "sold AAPL 20");
+    expect(savedPortfolio().find(p => p.ticker === "AAPL").shares).toBe(30);
+  });
+
+  test("sold all shares removes the ticker from portfolio", async () => {
+    const user = setup();
+    await openSetupFresh(user);
+    await smartAdd(user, "TSLA 10");
     expect(savedPortfolio().some(p => p.ticker === "TSLA")).toBe(true);
-    await user.click(screen.getByRole("button", { name: "×" }));
+    await smartAdd(user, "sold TSLA 10");
     expect(savedPortfolio().some(p => p.ticker === "TSLA")).toBe(false);
   });
 
-  test("bulk import adds multiple new tickers to localStorage", async () => {
+  test("multi-line input adds multiple tickers in one apply", async () => {
     const user = setup();
     await openSetupFresh(user);
-    await user.type(screen.getByPlaceholderText(/AAPL, 50/i), "MSFT, 25\nAMZN, 10");
-    await user.click(screen.getByRole("button", { name: /↑ import/i }));
+    await smartAdd(user, "MSFT 25\nAMZN 10");
     const portfolio = savedPortfolio();
     expect(portfolio.some(p => p.ticker === "MSFT" && p.shares === 25)).toBe(true);
     expect(portfolio.some(p => p.ticker === "AMZN" && p.shares === 10)).toBe(true);
   });
 
-  test("bulk import rejects invalid lines and shows an error", async () => {
+  test("invalid line disables Apply and shows error text", async () => {
     const user = setup();
     await openSetupFresh(user);
-    await user.type(screen.getByPlaceholderText(/AAPL, 50/i), "BADLINE");
-    await user.click(screen.getByRole("button", { name: /↑ import/i }));
-    expect(screen.getByText(/need ticker and shares/i)).toBeInTheDocument();
+    const ta = screen.getByPlaceholderText(/AAPL 100/);
+    await user.type(ta, "BADLINE");
+    expect(screen.getByRole("button", { name: /apply changes/i })).toBeDisabled();
+    expect(screen.getByText(/couldn't be parsed/i)).toBeInTheDocument();
+  });
+
+  test("textarea is cleared after a successful apply", async () => {
+    const user = setup();
+    await openSetupFresh(user);
+    await smartAdd(user, "GOOG 10");
+    expect(screen.getByPlaceholderText(/AAPL 100/).value).toBe("");
+  });
+
+  test("removing a stock via × chip removes it from localStorage", async () => {
+    const user = setup();
+    await openSetupFresh(user);
+    await smartAdd(user, "TSLA 10");
+    expect(savedPortfolio().some(p => p.ticker === "TSLA")).toBe(true);
+    await user.click(screen.getByRole("button", { name: "×" }));
+    expect(savedPortfolio().some(p => p.ticker === "TSLA")).toBe(false);
   });
 
   test("clear all empties the portfolio in localStorage", async () => {
     const user = setup();
     await openSetupFresh(user);
-    await user.type(screen.getByPlaceholderText("TICKER"), "META");
-    await user.click(screen.getByRole("button", { name: /\+ add/i }));
+    await smartAdd(user, "META 5");
     expect(savedPortfolio().length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /clear all/i }));
     expect(savedPortfolio()).toHaveLength(0);
@@ -171,6 +204,24 @@ describe("portfolio management", () => {
     await user.clear(nameInput);
     await user.type(nameInput, "My Stocks");
     expect(localStorage.getItem("ph_name")).toBe("My Stocks");
+  });
+
+  test("Example button populates the textarea", async () => {
+    const user = setup();
+    await openSetupFresh(user);
+    await user.click(screen.getByRole("button", { name: /example/i }));
+    expect(screen.getByPlaceholderText(/AAPL 100/).value).toMatch(/AAPL/);
+  });
+
+  test("SmartInput Clear button empties the textarea", async () => {
+    const user = setup();
+    await openSetupFresh(user);
+    const ta = screen.getByPlaceholderText(/AAPL 100/);
+    await user.type(ta, "GOOG 10");
+    // The Clear button inside SmartInput (not "Clear all" in holdings)
+    const clearBtns = screen.getAllByRole("button", { name: /^clear$/i });
+    await user.click(clearBtns[0]);
+    expect(ta.value).toBe("");
   });
 });
 
@@ -239,47 +290,166 @@ describe("history tab", () => {
   });
 });
 
-// ─── Theme switcher ───────────────────────────────────────────────
+// ─── Annotation editing (History tab) ────────────────────────────
+describe("annotation editing", () => {
+  async function seedAndOpenHistory(user) {
+    await user.click(screen.getByRole("button", { name: "History" }));
+    await user.click(screen.getByRole("button", { name: /load demo data/i }));
+  }
+
+  test("clicking a note enters edit mode and shows an input", async () => {
+    const user = setup();
+    await seedAndOpenHistory(user);
+    await user.click(screen.getByText("AI momentum, added on dip"));
+    expect(screen.getByPlaceholderText("Add a note…")).toBeInTheDocument();
+  });
+
+  test("edit input is pre-filled with the existing note", async () => {
+    const user = setup();
+    await seedAndOpenHistory(user);
+    await user.click(screen.getByText("AI momentum, added on dip"));
+    expect(screen.getByPlaceholderText("Add a note…").value).toBe("AI momentum, added on dip");
+  });
+
+  test("pressing Enter saves the updated note to localStorage", async () => {
+    const user = setup();
+    await seedAndOpenHistory(user);
+    await user.click(screen.getByText("AI momentum, added on dip"));
+    const input = screen.getByPlaceholderText("Add a note…");
+    await user.clear(input);
+    await user.type(input, "Entered on dip{Enter}");
+    expect(savedEvents().some(e => e.note === "Entered on dip")).toBe(true);
+  });
+
+  test("clicking ✓ saves the updated note to localStorage", async () => {
+    const user = setup();
+    await seedAndOpenHistory(user);
+    await user.click(screen.getByText("Rebalancing tech allocation"));
+    const input = screen.getByPlaceholderText("Add a note…");
+    await user.clear(input);
+    await user.type(input, "Confirmed rebalance");
+    await user.click(screen.getByTitle("Save (Enter)"));
+    expect(savedEvents().some(e => e.note === "Confirmed rebalance")).toBe(true);
+  });
+
+  test("after saving, the input is replaced by the new note text", async () => {
+    const user = setup();
+    await seedAndOpenHistory(user);
+    await user.click(screen.getByText("Rebalancing tech allocation"));
+    const input = screen.getByPlaceholderText("Add a note…");
+    await user.clear(input);
+    await user.type(input, "New label{Enter}");
+    expect(screen.queryByPlaceholderText("Add a note…")).not.toBeInTheDocument();
+    expect(screen.getByText("New label")).toBeInTheDocument();
+  });
+
+  test("pressing Escape cancels editing without saving", async () => {
+    const user = setup();
+    await seedAndOpenHistory(user);
+    const originalNote = "AI momentum, added on dip";
+    await user.click(screen.getByText(originalNote));
+    const input = screen.getByPlaceholderText("Add a note…");
+    await user.clear(input);
+    await user.type(input, "Should not persist");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByPlaceholderText("Add a note…")).not.toBeInTheDocument();
+    expect(savedEvents().some(e => e.note === "Should not persist")).toBe(false);
+    // Original note unchanged in storage
+    expect(savedEvents().some(e => e.note === originalNote)).toBe(true);
+  });
+
+  test("clicking ✕ cancels editing without saving", async () => {
+    const user = setup();
+    await seedAndOpenHistory(user);
+    await user.click(screen.getByText("AI momentum, added on dip"));
+    const input = screen.getByPlaceholderText("Add a note…");
+    await user.clear(input);
+    await user.type(input, "Should not persist either");
+    await user.click(screen.getByTitle("Cancel (Esc)"));
+    expect(screen.queryByPlaceholderText("Add a note…")).not.toBeInTheDocument();
+    expect(savedEvents().some(e => e.note === "Should not persist either")).toBe(false);
+  });
+
+  test("saving an empty note removes the note property from the event", async () => {
+    const user = setup();
+    await seedAndOpenHistory(user);
+    await user.click(screen.getByText("Rotating out of energy"));
+    const input = screen.getByPlaceholderText("Add a note…");
+    await user.clear(input);
+    await user.click(screen.getByTitle("Save (Enter)"));
+    const xomEvent = savedEvents().find(e => e.ticker === "XOM");
+    expect(xomEvent).toBeDefined();
+    expect(xomEvent).not.toHaveProperty("note");
+  });
+});
+
+// ─── Theme switcher (in Setup tab) ───────────────────────────────
 describe("theme switcher", () => {
-  test("renders three theme swatch buttons", () => {
-    setup();
+  async function openSetup(user) {
+    await user.click(screen.getByRole("button", { name: "Setup" }));
+  }
+
+  test("renders three theme buttons in the Setup tab", async () => {
+    const user = setup();
+    await openSetup(user);
     expect(screen.getByRole("button", { name: /dark/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /warm/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /light/i })).toBeInTheDocument();
   });
 
-  test("defaults to dark theme (no localStorage key set)", () => {
+  test("theme buttons are NOT present outside Setup tab", () => {
     setup();
+    // On initial Heatmap tab — no Dark/Warm/Light buttons
+    expect(screen.queryByRole("button", { name: /^dark$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^warm$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^light$/i })).not.toBeInTheDocument();
+  });
+
+  test("defaults to dark theme (no localStorage key set)", async () => {
+    const user = setup();
+    await openSetup(user);
     expect(localStorage.getItem("ph_theme")).toBeNull();
-    // The dark swatch button should be present (rendered regardless of active state)
     expect(screen.getByRole("button", { name: /dark/i })).toBeInTheDocument();
   });
 
-  test("clicking Warm swatch persists 'warm' to localStorage", async () => {
+  test("clicking Warm persists 'warm' to localStorage", async () => {
     const user = setup();
+    await openSetup(user);
     await user.click(screen.getByRole("button", { name: /warm/i }));
     expect(localStorage.getItem("ph_theme")).toBe("warm");
   });
 
-  test("clicking Light swatch persists 'light' to localStorage", async () => {
+  test("clicking Light persists 'light' to localStorage", async () => {
     const user = setup();
+    await openSetup(user);
     await user.click(screen.getByRole("button", { name: /light/i }));
     expect(localStorage.getItem("ph_theme")).toBe("light");
   });
 
-  test("clicking Dark swatch persists 'dark' to localStorage", async () => {
+  test("clicking Dark persists 'dark' to localStorage", async () => {
     const user = setup();
+    await openSetup(user);
     await user.click(screen.getByRole("button", { name: /warm/i }));
     await user.click(screen.getByRole("button", { name: /dark/i }));
     expect(localStorage.getItem("ph_theme")).toBe("dark");
   });
 
-  test("persisted theme is loaded on render", () => {
+  test("active theme shows a checkmark (✓) next to its label", async () => {
+    localStorage.setItem("ph_theme", "warm");
+    const user = setup();
+    await openSetup(user);
+    // The warm button should contain a ✓
+    const warmBtn = screen.getByRole("button", { name: /warm/i });
+    expect(warmBtn).toHaveTextContent("✓");
+  });
+
+  test("persisted theme is loaded on render", async () => {
     localStorage.setItem("ph_theme", "light");
-    setup();
-    // App reads from localStorage — verify it doesn't crash and theme key is unchanged
+    const user = setup();
+    await openSetup(user);
     expect(localStorage.getItem("ph_theme")).toBe("light");
-    expect(screen.getByRole("button", { name: /light/i })).toBeInTheDocument();
+    // Light button should carry the active checkmark
+    expect(screen.getByRole("button", { name: /light/i })).toHaveTextContent("✓");
   });
 });
 
@@ -290,8 +460,8 @@ describe("demo mode", () => {
     expect(screen.getByText("Demo portfolio")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Setup" }));
     await user.click(screen.getByRole("button", { name: /clear demo/i }));
-    await user.type(screen.getByPlaceholderText("TICKER"), "AAPL");
-    await user.click(screen.getByRole("button", { name: /\+ add/i }));
+    await user.type(screen.getByPlaceholderText(/AAPL 100/), "AAPL 10");
+    await user.click(screen.getByRole("button", { name: /apply changes/i }));
     await user.click(screen.getByRole("button", { name: "Heatmap" }));
     await waitFor(() => {
       expect(screen.queryByText("Demo portfolio")).not.toBeInTheDocument();

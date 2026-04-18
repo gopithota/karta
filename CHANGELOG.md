@@ -1,5 +1,51 @@
 # Karta — Changelog
 
+## v0.6.0 — 2026-04-18
+
+### Smart Input, Annotation Editing & Setup Redesign
+
+**Smart Input — Split Diff stock editor (replaces bulk import + single add)**
+- Free-form command editor on the left; live "portfolio after apply" diff on the right
+- Supports natural language: `AAPL 100`, `add NVDA 25`, `sold META 3`, `buy 10 TSLA`, `drop 6 NVDA`
+- Auto-detects reversed `COUNT TICKER` order — `sold 8 META` and `sold META 8` both work
+- Operators: `add / added / bought / buy / plus / +` to increment; `sold / sell / drop / dropped / remove / removed / - / minus` to decrement; bare `TICKER COUNT` to set
+- Semantics: set creates or replaces; add creates if new; sold clamps to 0 and removes the row
+- Right panel shows only tickers mentioned in the input, color-coded: green (new), blue (updated), red (removed)
+- Footer shows live command count, skipped-line warnings, and inline parse error details
+- Example button pre-fills the textarea; textarea clears automatically after a successful apply
+- Placeholder text rendered in italics
+
+**Inline annotation editing (History tab)**
+- Hover any row in Portfolio Changes to reveal a pencil icon (✎) beside the note
+- Click the pencil or the note text to enter inline edit mode — no modal, no separate form
+- Confirm with ✓ or Enter; cancel with ✕ or Escape
+- Saving an empty note removes the `note` property entirely from the event
+- Icon only appears on the hovered row — zero visual clutter at rest
+
+**Setup page layout redesign**
+- Two-column floating tile grid: Data Source + Portfolio on the left, Appearance on the right
+- All cards have a subtle box shadow for a lifted, floating feel
+- Appearance tile updated to vertical rows (dot + label + active checkmark ✓)
+
+**Theme picker moved to Setup**
+- Removed from the app header — cleaner toolbar
+- Now lives in the Appearance card in Setup tab
+- Theme buttons show a ✓ on the active selection
+
+**Landing page — freemium preparation**
+- Removed GitHub link from nav bar and footer
+- Removed all "open source" and "free & open source" copy
+- "Open source — verify it yourself" privacy card replaced with "Fully auditable in your browser" (dev-tools framing)
+- Footer tagline updated to "— portfolio heatmap"
+
+**Tests**
+- 110 tests passing across 2 files
+- New unit suites: `parseLine` (15 tests) and `applyAll` (11 tests) covering all ops, reversed-order detection, clamping, semantic errors, and edge cases
+- New integration suites: annotation editing (9 tests), SmartInput UI (13 tests), theme placement in Setup
+- All portfolio management tests updated for the SmartInput API
+
+---
+
 ## v0.5.0 — 2026-04-17
 
 ### Theme System
