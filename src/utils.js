@@ -48,15 +48,18 @@ export function computeTreemap(items, W, H) {
 }
 
 // ─── Color scale ──────────────────────────────────────────────────
+// Tighter ±8% scale for richer mid-range differentiation.
+// Negative: dark burgundy → deep crimson (avoids harsh traffic-light red).
+// Positive: dark forest → rich emerald (adds blue-green warmth at extremes).
 export function perfColor(pct) {
   if (pct === null || pct === undefined || isNaN(pct)) return "#1e293b";
   if (Math.abs(pct) < 0.2) return "#334155";
-  const t = Math.max(-1, Math.min(1, pct / 10));
+  const t = Math.max(-1, Math.min(1, pct / 8));
   if (t < 0) {
     const i = -t;
-    return `rgb(${Math.round(30 + 190 * i)},${Math.round(40 - 10 * i)},${Math.round(40 - 10 * i)})`;
+    return `rgb(${Math.round(42 + 143 * i)},${Math.round(28 - 8 * i)},${Math.round(36 - 16 * i)})`;
   }
-  return `rgb(${Math.round(25 - 5 * t)},${Math.round(100 + 110 * t)},${Math.round(25 - 5 * t)})`;
+  return `rgb(${Math.round(24 - 10 * t)},${Math.round(68 + 107 * t)},${Math.round(42 + 26 * t)})`;
 }
 
 // ─── Demo detection ───────────────────────────────────────────────
