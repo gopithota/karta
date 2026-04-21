@@ -966,8 +966,8 @@ export default function App() {
               const lastEventDate = portfolioEvents.length > 0
                 ? portfolioEvents.reduce((max, ev) => ev.date > max ? ev.date : max, portfolioEvents[0].date)
                 : null;
-              // First history entry on or after the last event date
-              const baseEntry = lastEventDate ? history.find(h => h.date >= lastEventDate) : null;
+              // First history entry AFTER the last event date (skip the change day itself)
+              const baseEntry = lastEventDate ? history.find(h => h.date > lastEventDate) : null;
               // Only show if the baseline isn't the same as the most recent entry (needs at least 1 day of data after the change)
               const changeSinceLastPortfolioChange = baseEntry && baseEntry.date !== last.date
                 ? ((last.value - baseEntry.value) / baseEntry.value) * 100
