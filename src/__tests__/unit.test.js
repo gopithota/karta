@@ -75,16 +75,16 @@ describe("computeTreemap", () => {
 
 // ─── perfColor ────────────────────────────────────────────────────
 describe("perfColor", () => {
-  test("null / undefined / NaN → dark background sentinel", () => {
-    expect(perfColor(null)).toBe("#1e293b");
-    expect(perfColor(undefined)).toBe("#1e293b");
-    expect(perfColor(NaN)).toBe("#1e293b");
+  test("null / undefined / NaN → light neutral sentinel", () => {
+    expect(perfColor(null)).toBe("#D1D5DB");
+    expect(perfColor(undefined)).toBe("#D1D5DB");
+    expect(perfColor(NaN)).toBe("#D1D5DB");
   });
 
-  test("values within ±0.2 → grey", () => {
-    expect(perfColor(0)).toBe("#334155");
-    expect(perfColor(0.19)).toBe("#334155");
-    expect(perfColor(-0.19)).toBe("#334155");
+  test("values within ±0.2 → light grey", () => {
+    expect(perfColor(0)).toBe("#E8EAED");
+    expect(perfColor(0.19)).toBe("#E8EAED");
+    expect(perfColor(-0.19)).toBe("#E8EAED");
   });
 
   test("positive value → green channel dominant", () => {
@@ -114,10 +114,12 @@ describe("perfColor", () => {
     });
   });
 
-  test("stronger positive → more green than weaker positive", () => {
-    const g1 = perfColor(2).match(/\d+/g).map(Number)[1];
+  test("stronger positive → deeper (darker) green than weaker positive", () => {
+    // New Google Finance palette: light mint (weak) → deep green (strong).
+    // Stronger moves have a lower G channel value (deeper/darker green).
+    const g2 = perfColor(2).match(/\d+/g).map(Number)[1];
     const g10 = perfColor(10).match(/\d+/g).map(Number)[1];
-    expect(g10).toBeGreaterThan(g1);
+    expect(g10).toBeLessThan(g2);
   });
 });
 
