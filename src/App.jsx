@@ -413,6 +413,7 @@ export default function App() {
 
         const entry = {
           price: cur,
+          prevClose: q.pc,
           today: q.dp,
           ytd:   ret(c1y, ts.ytd),
           "3m":  ret(c1y, ts["3m"]),
@@ -432,14 +433,15 @@ export default function App() {
       if (!useShared && i < portfolio.length - 1) await sleep(220);
     }
 
-    // Snapshot: record total portfolio value; change % is derived from prev snapshot
+    // Snapshot: record current value + prev-close value so history % matches header
     {
-      let totalVal = 0;
+      let currentVal = 0, prevCloseVal = 0;
       for (const { ticker, shares } of portfolio) {
         const d = collected[ticker];
-        if (d?.price) totalVal += d.price * shares;
+        if (d?.price)    currentVal  += d.price    * shares;
+        if (d?.prevClose) prevCloseVal += d.prevClose * shares;
       }
-      recordDailySnapshot(totalVal);
+      recordDailySnapshot(currentVal, prevCloseVal);
     }
 
     if (!silent) {
@@ -480,32 +482,55 @@ export default function App() {
 
   const aggReturn = useMemo(() => {
     if (!Object.keys(stockData).length) return null;
-    let wSum = 0, wRet = 0;
+    let currentVal = 0, prevCloseVal = 0;
     for (const { ticker, shares } of portfolio) {
       const d = stockData[ticker];
-      if (!d || d.today == null) continue;
-      const val = d.price * shares;
-      wRet += d.today * val; wSum += val;
+      if (!d?.price || !d?.prevClose) continue;
+      currentVal  += d.price    * shares;
+      prevCloseVal += d.prevClose * shares;
     }
-    return wSum > 0 ? wRet / wSum : null;
+    return prevCloseVal > 0 ? ((currentVal - prevCloseVal) / prevCloseVal) * 100 : null;
   }, [stockData, portfolio]);
 
-  // Record one entry per weekday after a successful fetch (overwrites same-day entry).
-  // change is derived from the previous snapshot value so it stays consistent with
-  // what the chart actually shows — not from Finnhub's q.dp which is vs official close
-  // and can diverge when snapshots are taken intraday at different times each day.
-  const recordDailySnapshot = useCallback((value) => {
-    if (isDemo || value <= 0) return;
-    const today = new Date();
-    const dow = today.getDay();
-    if (dow === 0 || dow === 6) return; // skip weekends
-    const dateStr = today.toISOString().split("T")[0];
+  // Record today's snapshot and retroactively correct yesterday's entry to its
+  // official EOD value — so history % always uses the same baseline as the header.
+  //
+  // Header formula:  (currentVal − prevCloseVal) / prevCloseVal
+  // History formula: same — prevCloseVal = sum(q.pc × shares) for all stocks
+  //
+  // Retroactive correction: q.pc is yesterday's official close, so each refresh
+  // patches yesterday's entry to that close price, keeping past chart values EOD-accurate.
+  const recordDailySnapshot = useCallback((currentVal, prevCloseVal) => {
+    if (isDemo || currentVal <= 0) return;
+    const now = new Date();
+    if (now.getDay() === 0 || now.getDay() === 6) return; // skip weekends
+    const dateStr = now.toISOString().split("T")[0];
+
     setHistory(prev => {
-      const prevEntry = prev.filter(h => h.date !== dateStr).slice(-1)[0];
-      const change = prevEntry?.value > 0
-        ? ((value - prevEntry.value) / prevEntry.value) * 100
+      let base = prev;
+
+      // Patch the previous trading day's entry to its official close value
+      if (prevCloseVal > 0) {
+        const d = new Date(dateStr + "T12:00:00");
+        do { d.setDate(d.getDate() - 1); } while (d.getDay() === 0 || d.getDay() === 6);
+        const prevDate = d.toISOString().split("T")[0];
+        const prevIdx = base.findIndex(h => h.date === prevDate);
+        if (prevIdx >= 0) {
+          const beforePrev = base.filter(h => h.date < prevDate).slice(-1)[0];
+          const correctedChange = beforePrev?.value > 0
+            ? ((prevCloseVal - beforePrev.value) / beforePrev.value) * 100
+            : base[prevIdx].change;
+          base = base.map((h, i) =>
+            i === prevIdx ? { ...h, value: prevCloseVal, change: correctedChange } : h
+          );
+        }
+      }
+
+      // Today: change vs official prev close = exact same number as the header
+      const todayChange = prevCloseVal > 0
+        ? ((currentVal - prevCloseVal) / prevCloseVal) * 100
         : null;
-      const next = applySnapshot(prev, dateStr, value, change);
+      const next = applySnapshot(base, dateStr, currentVal, todayChange);
       localStorage.setItem("ph_history", JSON.stringify(next));
       return next;
     });
