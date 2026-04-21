@@ -432,19 +432,14 @@ export default function App() {
       if (!useShared && i < portfolio.length - 1) await sleep(220);
     }
 
-    // Snapshot: compute total value + weighted daily % from collected data
+    // Snapshot: record total portfolio value; change % is derived from prev snapshot
     {
-      let totalVal = 0, wRet = 0, wSum = 0;
+      let totalVal = 0;
       for (const { ticker, shares } of portfolio) {
         const d = collected[ticker];
-        if (d?.price) {
-          const val = d.price * shares;
-          totalVal += val;
-          if (d.today != null) { wRet += d.today * val; wSum += val; }
-        }
+        if (d?.price) totalVal += d.price * shares;
       }
-      const change = wSum > 0 ? wRet / wSum : null;
-      recordDailySnapshot(totalVal, change);
+      recordDailySnapshot(totalVal);
     }
 
     if (!silent) {
@@ -495,14 +490,21 @@ export default function App() {
     return wSum > 0 ? wRet / wSum : null;
   }, [stockData, portfolio]);
 
-  // Record one entry per weekday after a successful fetch (overwrites same-day entry)
-  const recordDailySnapshot = useCallback((value, change) => {
+  // Record one entry per weekday after a successful fetch (overwrites same-day entry).
+  // change is derived from the previous snapshot value so it stays consistent with
+  // what the chart actually shows — not from Finnhub's q.dp which is vs official close
+  // and can diverge when snapshots are taken intraday at different times each day.
+  const recordDailySnapshot = useCallback((value) => {
     if (isDemo || value <= 0) return;
     const today = new Date();
     const dow = today.getDay();
     if (dow === 0 || dow === 6) return; // skip weekends
     const dateStr = today.toISOString().split("T")[0];
     setHistory(prev => {
+      const prevEntry = prev.filter(h => h.date !== dateStr).slice(-1)[0];
+      const change = prevEntry?.value > 0
+        ? ((value - prevEntry.value) / prevEntry.value) * 100
+        : null;
       const next = applySnapshot(prev, dateStr, value, change);
       localStorage.setItem("ph_history", JSON.stringify(next));
       return next;
