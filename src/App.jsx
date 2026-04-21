@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { computeTreemap, perfColor, IS_DEMO, applySnapshot, applyEvent } from "./utils.js";
+import { computeTreemap, perfColor, tileFgColor, IS_DEMO, applySnapshot, applyEvent } from "./utils.js";
 import { THEMES, SWATCHES, useTheme } from "./theme.js";
 import SmartInput from "./SmartInput.jsx";
 
@@ -707,7 +707,10 @@ export default function App() {
             { key: "history",  label: "History",   short: "Hist" },
             { key: "setup",    label: "Setup",     short: "Setup" },
           ].map(({ key, label, short }) => (
-            <button key={key} onClick={() => setTab(key)} style={{ ...btnBase(tab === key), textTransform: "capitalize", padding: isMobile ? "5px 9px" : "5px 13px", fontSize: isMobile ? 12 : 13 }}>
+            <button key={key} onClick={() => {
+              setTab(key);
+              if (key === "heatmap" && !loading && rateLimitSecs <= 0) fetchData(apiKey, true);
+            }} style={{ ...btnBase(tab === key), textTransform: "capitalize", padding: isMobile ? "5px 9px" : "5px 13px", fontSize: isMobile ? 12 : 13 }}>
               {isMobile ? short : label}
             </button>
           ))}
@@ -860,6 +863,7 @@ export default function App() {
                 const showTicker = bw > 30 && bh > 20;
                 const showPerf   = bw > 55 && bh > 42;
                 const showPrice  = bw > 76 && bh > 60;
+                const fg = tileFgColor(rect.perf);
                 return (
                   <div
                     key={rect.id}
@@ -871,15 +875,15 @@ export default function App() {
                       overflow: "hidden",
                       transition: "filter .15s",
                       cursor: isMobile ? "pointer" : "default",
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 0 1px rgba(0,0,0,0.14)",
+                      boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)",
                     }}
-                    onMouseEnter={isMobile ? undefined : e => { e.currentTarget.style.filter = "brightness(1.14)"; setTooltip(rect); }}
+                    onMouseEnter={isMobile ? undefined : e => { e.currentTarget.style.filter = "brightness(0.93)"; setTooltip(rect); }}
                     onMouseLeave={isMobile ? undefined : e => { e.currentTarget.style.filter = ""; setTooltip(null); }}
                     onClick={isMobile ? e => { e.stopPropagation(); setTooltip(tooltip?.id === rect.id ? null : rect); } : undefined}
                   >
-                    {showTicker && <div style={{ fontSize: Math.max(9, Math.min(20, bw / 5.5)), fontWeight: 700, color: "rgba(255,255,255,0.93)", lineHeight: 1.1, letterSpacing: "-0.01em" }}>{rect.ticker}</div>}
-                    {showPerf  && rect.perf !== null && <div style={{ fontSize: Math.max(8, Math.min(14, bw / 7.5)), fontWeight: 600, color: "rgba(255,255,255,0.78)", lineHeight: 1.3 }}>{rect.perf >= 0 ? "+" : ""}{rect.perf.toFixed(2)}%</div>}
-                    {showPrice && rect.price && <div style={{ fontSize: Math.max(7, Math.min(11, bw / 10)), color: "rgba(255,255,255,0.44)", lineHeight: 1.3 }}>${rect.price.toFixed(2)}</div>}
+                    {showTicker && <div style={{ fontSize: Math.max(9, Math.min(20, bw / 5.5)), fontWeight: 700, color: fg.primary, lineHeight: 1.1, letterSpacing: "-0.01em" }}>{rect.ticker}</div>}
+                    {showPerf  && rect.perf !== null && <div style={{ fontSize: Math.max(8, Math.min(14, bw / 7.5)), fontWeight: 600, color: fg.secondary, lineHeight: 1.3 }}>{rect.perf >= 0 ? "+" : ""}{rect.perf.toFixed(2)}%</div>}
+                    {showPrice && rect.price && <div style={{ fontSize: Math.max(7, Math.min(11, bw / 10)), color: fg.tertiary, lineHeight: 1.3 }}>${rect.price.toFixed(2)}</div>}
                   </div>
                 );
               })}
@@ -957,17 +961,38 @@ export default function App() {
             {history.length >= 2 && (() => {
               const first = history[0], last = history[history.length - 1];
               const totalChange = ((last.value - first.value) / first.value) * 100;
+
+              // % change since last portfolio composition change (last add/remove/update event)
+              const lastEventDate = portfolioEvents.length > 0
+                ? portfolioEvents.reduce((max, ev) => ev.date > max ? ev.date : max, portfolioEvents[0].date)
+                : null;
+              // First history entry on or after the last event date
+              const baseEntry = lastEventDate ? history.find(h => h.date >= lastEventDate) : null;
+              // Only show if the baseline isn't the same as the most recent entry (needs at least 1 day of data after the change)
+              const changeSinceLastPortfolioChange = baseEntry && baseEntry.date !== last.date
+                ? ((last.value - baseEntry.value) / baseEntry.value) * 100
+                : null;
+
+              const cards = [
+                { label: "Current Value", value: `$${last.value.toLocaleString("en-US", { maximumFractionDigits: 0 })}` },
+                { label: "Since First Record", value: `${totalChange >= 0 ? "+" : ""}${totalChange.toFixed(2)}%`, color: totalChange >= 0 ? S.green : "#f87171" },
+                ...(changeSinceLastPortfolioChange !== null ? [{
+                  label: "Since Last Portfolio Change",
+                  value: `${changeSinceLastPortfolioChange >= 0 ? "+" : ""}${changeSinceLastPortfolioChange.toFixed(2)}%`,
+                  color: changeSinceLastPortfolioChange >= 0 ? S.green : "#f87171",
+                  sub: new Date(baseEntry.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+                }] : []),
+                { label: "Tracking Since", value: new Date(first.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) },
+                { label: "Days Recorded", value: `${history.length}` },
+              ];
+
               return (
                 <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-                  {[
-                    { label: "Current Value", value: `$${last.value.toLocaleString("en-US", { maximumFractionDigits: 0 })}` },
-                    { label: "Since First Record", value: `${totalChange >= 0 ? "+" : ""}${totalChange.toFixed(2)}%`, color: totalChange >= 0 ? S.green : "#f87171" },
-                    { label: "Tracking Since", value: new Date(first.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) },
-                    { label: "Days Recorded", value: `${history.length}` },
-                  ].map(s => (
+                  {cards.map(s => (
                     <div key={s.label} style={{ background: S.panel, borderRadius: 8, border: `1px solid ${S.border}`, padding: "10px 16px", flex: "1 1 140px" }}>
                       <div style={{ fontSize: 11, color: S.muted, marginBottom: 4 }}>{s.label}</div>
                       <div style={{ fontSize: 16, fontWeight: 800, color: s.color || S.text }}>{s.value}</div>
+                      {s.sub && <div style={{ fontSize: 10, color: S.subtext, marginTop: 2 }}>from {s.sub}</div>}
                     </div>
                   ))}
                 </div>

@@ -48,18 +48,37 @@ export function computeTreemap(items, W, H) {
 }
 
 // ─── Color scale ──────────────────────────────────────────────────
-// Tighter ±8% scale for richer mid-range differentiation.
-// Negative: dark burgundy → deep crimson (avoids harsh traffic-light red).
-// Positive: dark forest → rich emerald (adds blue-green warmth at extremes).
+// Google Finance-inspired palette: light pastels for small moves,
+// deep saturated for strong ones. Light tiles use dark text (see tileFgColor).
+// Green: #E6F4EA (Google green-light) → #137333 (Google green-dark)
+// Red:   #FCE8E6 (Google red-light)   → #A50E0E (Google red-dark)
 export function perfColor(pct) {
-  if (pct === null || pct === undefined || isNaN(pct)) return "#1e293b";
-  if (Math.abs(pct) < 0.2) return "#334155";
+  if (pct === null || pct === undefined || isNaN(pct)) return "#D1D5DB";
+  if (Math.abs(pct) < 0.2) return "#E8EAED";
   const t = Math.max(-1, Math.min(1, pct / 8));
   if (t < 0) {
     const i = -t;
-    return `rgb(${Math.round(42 + 143 * i)},${Math.round(28 - 8 * i)},${Math.round(36 - 16 * i)})`;
+    // #FCE8E6 (rgb 252,232,230) → #A50E0E (rgb 165,14,14)
+    return `rgb(${Math.round(252 - 87 * i)},${Math.round(232 - 218 * i)},${Math.round(230 - 216 * i)})`;
   }
-  return `rgb(${Math.round(24 - 10 * t)},${Math.round(68 + 107 * t)},${Math.round(42 + 26 * t)})`;
+  // #E6F4EA (rgb 230,244,234) → #137333 (rgb 19,115,51)
+  return `rgb(${Math.round(230 - 211 * t)},${Math.round(244 - 129 * t)},${Math.round(234 - 183 * t)})`;
+}
+
+// Text colors for tiles — dark on light backgrounds, white on dark ones.
+// Tiles stronger than |pct| > 6% (t > 0.75) are dark enough for white text.
+export function tileFgColor(pct) {
+  const t = (pct != null && !isNaN(pct)) ? Math.abs(pct) / 8 : 0;
+  if (t > 0.75) {
+    return { primary: "rgba(255,255,255,0.92)", secondary: "rgba(255,255,255,0.78)", tertiary: "rgba(255,255,255,0.50)" };
+  }
+  if (pct == null || isNaN(pct) || Math.abs(pct) < 0.2) {
+    return { primary: "rgba(60,64,67,0.80)", secondary: "rgba(60,64,67,0.60)", tertiary: "rgba(60,64,67,0.38)" };
+  }
+  if (pct > 0) {
+    return { primary: "rgba(7,46,21,0.90)", secondary: "rgba(7,46,21,0.72)", tertiary: "rgba(7,46,21,0.45)" };
+  }
+  return { primary: "rgba(66,6,6,0.90)", secondary: "rgba(66,6,6,0.72)", tertiary: "rgba(66,6,6,0.45)" };
 }
 
 // ─── Demo detection ───────────────────────────────────────────────
