@@ -71,39 +71,57 @@ function HistoryChart({ history, events, S }) {
   const minVal = rawMin - pad, maxVal = rawMax + pad;
   const valRange = maxVal - minVal;
 
-  const xScale = (i) => PAD.left + (history.length <= 1 ? cW / 2 : (i / (history.length - 1)) * cW);
+  // Date-based X scale — preserves temporal spacing between weekday entries
+  const minMs = new Date(history[0].date + "T12:00:00").getTime();
+  const maxMs = new Date(history[history.length - 1].date + "T12:00:00").getTime();
+  const xScale = (dateStr) => {
+    if (maxMs === minMs) return PAD.left + cW / 2;
+    return PAD.left + ((new Date(dateStr + "T12:00:00").getTime() - minMs) / (maxMs - minMs)) * cW;
+  };
   const yScale = (v) => PAD.top + cH - ((v - minVal) / valRange) * cH;
 
-  const pts = history.map((h, i) => ({ x: xScale(i), y: yScale(h.value) }));
-  const linePath = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const pts = history.map(h => ({ x: xScale(h.date), y: yScale(h.value) }));
   const yTicks = Array.from({ length: 5 }, (_, i) => minVal + (i / 4) * valRange);
 
   const xLabels = [];
   if (history.length <= 6) {
-    history.forEach((h, i) => xLabels.push({ i, label: fmtDate(h.date) }));
+    history.forEach(h => xLabels.push({ x: xScale(h.date), label: fmtDate(h.date) }));
   } else {
     let prevMonth = null;
-    history.forEach((h, i) => {
+    history.forEach(h => {
       const m = h.date.slice(0, 7);
-      if (m !== prevMonth) { xLabels.push({ i, label: fmtDate(h.date) }); prevMonth = m; }
+      if (m !== prevMonth) { xLabels.push({ x: xScale(h.date), label: fmtDate(h.date) }); prevMonth = m; }
     });
   }
+
+  // Split pts into independent segments at each portfolio composition change date
+  const evtDates = [...new Set(events.map(e => e.date))].sort();
+  const segRanges = [];
+  let segStart = 0;
+  for (let i = 1; i < history.length; i++) {
+    const crosses = evtDates.some(ed => ed > history[i - 1].date && ed <= history[i].date);
+    if (crosses) { segRanges.push({ start: segStart, end: i - 1 }); segStart = i; }
+  }
+  segRanges.push({ start: segStart, end: history.length - 1 });
+  const validRanges = segRanges.filter(r => r.start <= r.end);
+
+  // lineColor driven by the last segment's direction
+  const lastRange = validRanges[validRanges.length - 1];
+  const lastSegTrend = lastRange && lastRange.end > lastRange.start
+    ? history[lastRange.end].value - history[lastRange.start].value
+    : (vals.length >= 2 ? vals[vals.length - 1] - vals[0] : 0);
+  const lineColor = lastSegTrend >= 0 ? S.green : "#f87171";
 
   const eventMarkers = [];
   const seenEvtDates = new Set();
   events.forEach(ev => {
     if (seenEvtDates.has(ev.date)) return;
     seenEvtDates.add(ev.date);
-    let nearestIdx = 0, nearestDiff = Infinity;
-    history.forEach((h, i) => {
-      const diff = Math.abs(new Date(h.date + "T12:00:00") - new Date(ev.date + "T12:00:00"));
-      if (diff < nearestDiff) { nearestDiff = diff; nearestIdx = i; }
-    });
     const dateEvts = events.filter(e => e.date === ev.date);
     const hasAdd = dateEvts.some(e => e.type === "add" || e.type === "update");
     const hasRemove = dateEvts.some(e => e.type === "remove");
     const color = hasAdd && hasRemove ? "#facc15" : hasRemove ? "#f87171" : S.green;
-    eventMarkers.push({ date: ev.date, evts: dateEvts, x: xScale(nearestIdx), color });
+    eventMarkers.push({ date: ev.date, evts: dateEvts, x: xScale(ev.date), color });
   });
 
   // Only track the line hover when not over an event bubble
@@ -118,8 +136,6 @@ function HistoryChart({ history, events, S }) {
 
   const hovPt = hover != null && !hovEvent ? pts[hover] : null;
   const hovH  = hover != null && !hovEvent ? history[hover] : null;
-  const trend = vals.length >= 2 ? vals[vals.length - 1] - vals[0] : 0;
-  const lineColor = trend >= 0 ? S.green : "#f87171";
 
   return (
     <div style={{ position: "relative", width: "100%" }}>
@@ -145,8 +161,8 @@ function HistoryChart({ history, events, S }) {
             </g>
           );
         })}
-        {xLabels.map(({ i, label }) => (
-          <text key={i} x={xScale(i)} y={H - 6} textAnchor="middle" fill={S.chartLabel} fontSize={10}>{label}</text>
+        {xLabels.map(({ x, label }) => (
+          <text key={label} x={x} y={H - 6} textAnchor="middle" fill={S.chartLabel} fontSize={10}>{label}</text>
         ))}
         {/* Event marker lines + bubbles — intercept mouse so line hover stays off */}
         {eventMarkers.map((em) => (
@@ -163,16 +179,23 @@ function HistoryChart({ history, events, S }) {
             <circle cx={em.x} cy={PAD.top + 2} r={5} fill={em.color} />
           </g>
         ))}
-        {history.length > 1 && (
-          <path
-            d={`${linePath} L${pts[pts.length - 1].x.toFixed(1)},${(PAD.top + cH).toFixed(1)} L${pts[0].x.toFixed(1)},${(PAD.top + cH).toFixed(1)} Z`}
-            fill="url(#histAreaGrad)"
-          />
-        )}
-        {history.length > 1 && (
-          <path d={linePath} fill="none" stroke={lineColor} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        )}
-        {history.length === 1 && <circle cx={pts[0].x} cy={pts[0].y} r={5} fill={lineColor} />}
+        {validRanges.map(({ start, end }, si) => {
+          const segPts = pts.slice(start, end + 1);
+          if (segPts.length === 1) {
+            return <circle key={si} cx={segPts[0].x} cy={segPts[0].y} r={5} fill={lineColor} />;
+          }
+          const segLine = segPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+          const baseline = (PAD.top + cH).toFixed(1);
+          return (
+            <g key={si}>
+              <path
+                d={`${segLine} L${segPts[segPts.length - 1].x.toFixed(1)},${baseline} L${segPts[0].x.toFixed(1)},${baseline} Z`}
+                fill="url(#histAreaGrad)"
+              />
+              <path d={segLine} fill="none" stroke={lineColor} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+            </g>
+          );
+        })}
         {hovPt && (
           <g>
             <line x1={hovPt.x} x2={hovPt.x} y1={PAD.top} y2={PAD.top + cH} stroke={S.chartCross} strokeWidth={1} strokeDasharray="3,3" />
@@ -268,7 +291,10 @@ export default function App() {
   const [editingEventIdx,  setEditingEventIdx]  = useState(null);
   const [editingNote,      setEditingNote]      = useState("");
   const [hoveredEventIdx,  setHoveredEventIdx]  = useState(null);
-  const [stockData,    setStockData]    = useState({});
+  const [stockData,    setStockData]    = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ph_stockdata")) || {}; }
+    catch { return {}; }
+  });
   const [loading,      setLoading]      = useState(false);
   const [fetchErrors,  setFetchErrors]  = useState({});
   const [tab,          setTab]          = useState("heatmap");
@@ -289,6 +315,7 @@ export default function App() {
     catch { return []; }
   });
   const containerRef = useRef(null);
+  const lastFetchTimeRef = useRef(parseInt(localStorage.getItem("ph_last_fetch") || "0"));
   const [boxSize, setBoxSize] = useState({ w: 700, h: 460 });
 
   // Observe heatmap container size
@@ -317,9 +344,9 @@ export default function App() {
     return () => window.removeEventListener("resize", fn);
   }, []);
 
-  // Auto-fetch on mount using shared key when user has no key saved
+  // Auto-fetch on mount using shared key when user has no key saved — throttled to 15 min
   useEffect(() => {
-    if (!apiKey && portfolio.length) fetchData("", false);
+    if (!apiKey && portfolio.length && Date.now() - lastFetchTimeRef.current > 15 * 60 * 1000) fetchData("", false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -444,10 +471,18 @@ export default function App() {
       recordDailySnapshot(currentVal, prevCloseVal);
     }
 
+    // Persist latest prices to localStorage for instant display on next load
+    if (Object.keys(collected).length > 0) {
+      localStorage.setItem("ph_stockdata", JSON.stringify(collected));
+    }
+
     if (!silent) {
       setFetchErrors(errs);
       setLoading(false);
     }
+    // Record fetch timestamp for 15-min auto-refresh throttle
+    lastFetchTimeRef.current = Date.now();
+    localStorage.setItem("ph_last_fetch", String(Date.now()));
   }, [apiKey, portfolio, isDemo]); // recordDailySnapshot omitted — declared after fetchData, dep on isDemo covers it
 
   const getWeight = useCallback((ticker) => {
@@ -736,7 +771,7 @@ export default function App() {
           ].map(({ key, label, short }) => (
             <button key={key} onClick={() => {
               setTab(key);
-              if (key === "heatmap" && !loading && rateLimitSecs <= 0) fetchData(apiKey, true);
+              if (key === "heatmap" && !loading && rateLimitSecs <= 0 && Date.now() - lastFetchTimeRef.current > 15 * 60 * 1000) fetchData(apiKey, true);
             }} style={{ ...btnBase(tab === key), textTransform: "capitalize", padding: isMobile ? "5px 9px" : "5px 13px", fontSize: isMobile ? 12 : 13 }}>
               {isMobile ? short : label}
             </button>
