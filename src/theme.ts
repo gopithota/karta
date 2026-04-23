@@ -1,10 +1,10 @@
 import { useState, useCallback } from "react";
+import type { Theme, ThemeKey, Swatch } from "./types";
 
-export const THEMES = {
+export const THEMES: Record<ThemeKey, Theme> = {
 
   // ── Dark (cold navy) ─────────────────────────────────────────────
   dark: {
-    // Surfaces
     bg:           "#0c0f18",
     panel:        "#131825",
     border:       "#1c2536",
@@ -12,30 +12,24 @@ export const THEMES = {
     overlay:      "rgba(12,15,24,0.92)",
     tooltip:      "#1a2235",
     inputBg:      "#0c0f18",
-    // Text hierarchy
     text:         "#e2e8f0",
     muted:        "#64748b",
     subtext:      "#334155",
     strong:       "#f1f5f9",
     emphasis:     "#cbd5e1",
     code:         "#94a3b8",
-    // Interactive
     accent:       "#3b82f6",
     link:         "#93c5fd",
     green:        "#4ade80",
     greenDim:     "rgba(74,222,128,0.10)",
-    // Chart
     chartGrid:    "#1c2536",
     chartLabel:   "#475569",
     chartCross:   "#334155",
-    // Active tab
     tabActiveBg:      "#1a3160",
     tabActiveBorder:  "#3b82f6",
     tabActiveText:    "#93c5fd",
-    // FREE badge
     badgeFreeBg:      "#1d3a6e",
     badgeFreeText:    "#93c5fd",
-    // Landing
     navBg:        "rgba(8,11,18,0.92)",
     heroGrad:     "linear-gradient(160deg, #f8fafc 20%, #94a3b8 100%)",
     demoWin:      "#0c0f18",
@@ -145,18 +139,18 @@ export const THEMES = {
   },
 };
 
-// Swatch colors for the 3-way picker (dot colors that visually represent each theme)
-export const SWATCHES = [
+// Swatch colors for the 3-way picker
+export const SWATCHES: Swatch[] = [
   { key: "dark",  dot: "#1e2d4a", label: "Dark"  },
   { key: "warm",  dot: "#7c4a1a", label: "Warm"  },
   { key: "light", dot: "#e8ddd0", label: "Light" },
 ];
 
-export function useTheme() {
-  const [theme, _set] = useState(
-    () => localStorage.getItem("ph_theme") || "dark"
+export function useTheme(): [ThemeKey, (t: ThemeKey) => void] {
+  const [theme, _set] = useState<ThemeKey>(
+    () => (localStorage.getItem("ph_theme") as ThemeKey) || "dark"
   );
-  const setTheme = useCallback((t) => {
+  const setTheme = useCallback((t: ThemeKey) => {
     _set(t);
     localStorage.setItem("ph_theme", t);
   }, []);

@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { computeTreemap, perfColor, IS_DEMO, applySnapshot, applyEvent } from "../utils.js";
-import { THEMES, SWATCHES, useTheme } from "../theme.js";
-import { parseLine, applyAll } from "../SmartInput.jsx";
+import { computeTreemap, perfColor, tileFgColor, IS_DEMO, applySnapshot, applyEvent } from "../utils";
+import { THEMES, SWATCHES, useTheme } from "../theme";
+import { parseLine, applyAll } from "../SmartInput";
 
 // ─── computeTreemap ───────────────────────────────────────────────
 describe("computeTreemap", () => {
@@ -56,7 +56,7 @@ describe("computeTreemap", () => {
     const b = rects.find(r => r.id === "B");
     expect(a).toBeDefined();
     expect(b).toBeDefined();
-    expect(a.w * a.h).toBeGreaterThan(b.w * b.h);
+    expect(a!.w * a!.h).toBeGreaterThan(b!.w * b!.h);
   });
 
   test("extra properties are forwarded to output rects", () => {
@@ -69,7 +69,7 @@ describe("computeTreemap", () => {
     const rects = computeTreemap([{ id: "BIG", weight: 80 }, { id: "SML", weight: 20 }], 800, 600);
     const big = rects.find(r => r.id === "BIG");
     const sml = rects.find(r => r.id === "SML");
-    expect(big.w * big.h).toBeGreaterThan(sml.w * sml.h);
+    expect(big!.w * big!.h).toBeGreaterThan(sml!.w * sml!.h);
   });
 });
 
@@ -88,12 +88,12 @@ describe("perfColor", () => {
   });
 
   test("positive value → green channel dominant", () => {
-    const [r, g] = perfColor(5).match(/\d+/g).map(Number);
+    const [r, g] = perfColor(5).match(/\d+/g)!.map(Number);
     expect(g).toBeGreaterThan(r);
   });
 
   test("negative value → red channel dominant", () => {
-    const [r, g] = perfColor(-5).match(/\d+/g).map(Number);
+    const [r, g] = perfColor(-5).match(/\d+/g)!.map(Number);
     expect(r).toBeGreaterThan(g);
   });
 
@@ -106,7 +106,7 @@ describe("perfColor", () => {
     [-10, -5, -1, 0.5, 1, 5, 10].forEach(v => {
       const color = perfColor(v);
       if (color.startsWith("rgb")) {
-        color.match(/\d+/g).map(Number).forEach(ch => {
+        color.match(/\d+/g)!.map(Number).forEach(ch => {
           expect(ch).toBeGreaterThanOrEqual(0);
           expect(ch).toBeLessThanOrEqual(255);
         });
@@ -117,9 +117,68 @@ describe("perfColor", () => {
   test("stronger positive → deeper (darker) green than weaker positive", () => {
     // New Google Finance palette: light mint (weak) → deep green (strong).
     // Stronger moves have a lower G channel value (deeper/darker green).
-    const g2 = perfColor(2).match(/\d+/g).map(Number)[1];
-    const g10 = perfColor(10).match(/\d+/g).map(Number)[1];
+    const g2 = perfColor(2).match(/\d+/g)!.map(Number)[1];
+    const g10 = perfColor(10).match(/\d+/g)!.map(Number)[1];
     expect(g10).toBeLessThan(g2);
+  });
+});
+
+// ─── tileFgColor ─────────────────────────────────────────────────
+describe("tileFgColor", () => {
+  test("null/undefined → dark text (neutral tile)", () => {
+    const c = tileFgColor(null);
+    expect(c.primary).toMatch(/rgba\(60/);   // dark grey for neutral
+    expect(c.secondary).toMatch(/rgba\(60/);
+  });
+
+  test("NaN → dark text (neutral tile)", () => {
+    const c = tileFgColor(NaN);
+    expect(c.primary).toMatch(/rgba\(60/);
+  });
+
+  test("value within ±0.2 → neutral dark text (same as null)", () => {
+    expect(tileFgColor(0)).toEqual(tileFgColor(null));
+    expect(tileFgColor(0.1)).toEqual(tileFgColor(null));
+    expect(tileFgColor(-0.1)).toEqual(tileFgColor(null));
+  });
+
+  test("moderate positive (2%) → dark green text", () => {
+    const c = tileFgColor(2);
+    // Dark green: rgba(7,46,21,...)
+    expect(c.primary).toMatch(/rgba\(7/);
+  });
+
+  test("moderate negative (-2%) → dark red text", () => {
+    const c = tileFgColor(-2);
+    // Dark red: rgba(66,6,6,...)
+    expect(c.primary).toMatch(/rgba\(66/);
+  });
+
+  test("strong positive (>6%) → white text on dark tile", () => {
+    const c = tileFgColor(7);
+    expect(c.primary).toMatch(/rgba\(255,255,255/);
+    expect(c.secondary).toMatch(/rgba\(255,255,255/);
+    expect(c.tertiary).toMatch(/rgba\(255,255,255/);
+  });
+
+  test("strong negative (<-6%) → white text on dark tile", () => {
+    const c = tileFgColor(-7);
+    expect(c.primary).toMatch(/rgba\(255,255,255/);
+  });
+
+  test("returns object with primary, secondary, tertiary keys", () => {
+    const c = tileFgColor(3);
+    expect(c).toHaveProperty("primary");
+    expect(c).toHaveProperty("secondary");
+    expect(c).toHaveProperty("tertiary");
+  });
+
+  test("opacity decreases from primary to tertiary", () => {
+    // Extract opacity value from rgba string
+    const opacity = (s: string) => parseFloat(s.match(/[\d.]+\)$/)![0]);
+    const c = tileFgColor(3);  // moderate green — dark green text
+    expect(opacity(c.primary)).toBeGreaterThan(opacity(c.secondary));
+    expect(opacity(c.secondary)).toBeGreaterThan(opacity(c.tertiary));
   });
 });
 
@@ -200,10 +259,10 @@ describe("THEMES", () => {
   });
 
   test.each(["dark", "warm", "light"])("%s theme has all required style keys", (name) => {
-    const theme = THEMES[name];
+    const theme = THEMES[name as keyof typeof THEMES];
     REQUIRED_KEYS.forEach(key => {
       expect(theme, `${name}.${key} missing`).toHaveProperty(key);
-      expect(typeof theme[key]).toBe("string");
+      expect(typeof theme[key as keyof typeof theme]).toBe("string");
     });
   });
 });
@@ -254,7 +313,7 @@ describe("useTheme", () => {
 // ─── applyEvent ──────────────────────────────────────────────────
 describe("applyEvent", () => {
   test("appends a new event", () => {
-    const event = { date: "2026-04-15", time: "10:00:00", type: "add", ticker: "NVDA", shares: 5 };
+    const event = { date: "2026-04-15", time: "10:00:00", type: "add" as const, ticker: "NVDA", shares: 5 };
     const result = applyEvent([], event);
     expect(result).toHaveLength(1);
     expect(result[0].ticker).toBe("NVDA");
@@ -263,8 +322,8 @@ describe("applyEvent", () => {
   test("prunes events older than 1 year", () => {
     const oldDate = new Date();
     oldDate.setFullYear(oldDate.getFullYear() - 2);
-    const oldEvent = { date: oldDate.toISOString().split("T")[0], type: "add", ticker: "OLD", shares: 1 };
-    const newEvent = { date: "2026-04-15", type: "add", ticker: "NEW", shares: 1 };
+    const oldEvent = { date: oldDate.toISOString().split("T")[0], type: "add" as const, ticker: "OLD", shares: 1 };
+    const newEvent = { date: "2026-04-15", type: "add" as const, ticker: "NEW", shares: 1 };
     const result = applyEvent([oldEvent], newEvent);
     expect(result.find(e => e.ticker === "OLD")).toBeUndefined();
     expect(result.find(e => e.ticker === "NEW")).toBeDefined();
@@ -273,8 +332,8 @@ describe("applyEvent", () => {
   test("keeps events from within the past year", () => {
     const recentDate = new Date();
     recentDate.setMonth(recentDate.getMonth() - 6);
-    const recentEvent = { date: recentDate.toISOString().split("T")[0], type: "add", ticker: "KEEP", shares: 10 };
-    const newEvent = { date: "2026-04-15", type: "remove", ticker: "NEW", shares: 5 };
+    const recentEvent = { date: recentDate.toISOString().split("T")[0], type: "add" as const, ticker: "KEEP", shares: 10 };
+    const newEvent = { date: "2026-04-15", type: "remove" as const, ticker: "NEW", shares: 5 };
     const result = applyEvent([recentEvent], newEvent);
     expect(result).toHaveLength(2);
   });
@@ -348,7 +407,7 @@ describe("parseLine", () => {
   });
 
   test("raw field is always the original trimmed line", () => {
-    expect(parseLine("  add AAPL 10  ").raw).toBe("add AAPL 10");
+    expect(parseLine("  add AAPL 10  ")!.raw).toBe("add AAPL 10");
   });
 });
 

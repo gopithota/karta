@@ -1,10 +1,15 @@
 import { describe, test, expect } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import App from "../App.jsx";
+import App from "../App";
+import { resetStore } from "../store/usePortfolioStore";
 
-// Helper: renders App and returns a configured userEvent instance
+// Helper: renders App and returns a configured userEvent instance.
+// Calls resetStore() so any localStorage pre-set by the test body is
+// captured (beforeEach resets first, but some tests set localStorage
+// before calling setup(), which would otherwise be missed).
 function setup() {
+  resetStore();
   const user = userEvent.setup();
   render(<App />);
   return user;
