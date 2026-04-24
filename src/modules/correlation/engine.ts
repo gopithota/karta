@@ -207,23 +207,23 @@ export function clusterTickers(
 
 /**
  * Map a correlation value in [-1, 1] to an RGB string.
- * Indigo → warm off-white → crimson diverging scale.
+ * Matte steel-blue → warm off-white → matte burnt-amber diverging scale.
  */
 export function corrColor(r: number): string {
   if (isNaN(r)) return "rgba(100,100,100,0.12)";
 
   const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
-  // Zero-point: warm off-white so the grid looks neutral, not clinical
+  // Zero-point: warm off-white — neutral, not clinical
   const mid = [245, 243, 238] as const;
 
   if (r >= 0) {
     const t = Math.min(r, 1);
-    // warm off-white → deep crimson (via rich red)
-    return `rgb(${lerp(mid[0], 192, t)},${lerp(mid[1], 22, t)},${lerp(mid[2], 22, t)})`;
+    // warm off-white → matte burnt amber (desaturated orange)
+    return `rgb(${lerp(mid[0], 180, t)},${lerp(mid[1], 95, t)},${lerp(mid[2], 35, t)})`;
   } else {
     const t = Math.min(-r, 1);
-    // warm off-white → deep indigo (via strong blue)
-    return `rgb(${lerp(mid[0], 49, t)},${lerp(mid[1], 46, t)},${lerp(mid[2], 229, t)})`;
+    // warm off-white → matte steel blue (desaturated, not electric)
+    return `rgb(${lerp(mid[0], 45, t)},${lerp(mid[1], 90, t)},${lerp(mid[2], 158, t)})`;
   }
 }
 

@@ -149,7 +149,7 @@ export default function CorrelationView() {
   // ── Gap helpers ───────────────────────────────────────────────────
   // A gap is inserted between ticker[i] and ticker[i+1] when they belong to
   // different clusters. Solo→solo never gets a gap.
-  const gapSize = Math.round(cellSize / 2);
+  const gapSize = 6;
   const isBoundaryAfter = (i: number): boolean => {
     if (i >= tickers.length - 1) return false;
     const a = tickerColor.get(tickers[i]);
