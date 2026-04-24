@@ -104,11 +104,12 @@ export function buildMatrix(
 // ─── Ticker reordering ────────────────────────────────────────────
 
 /**
- * Greedy nearest-neighbour reordering so positively correlated tickers
- * cluster together visually. Returns the new index order into `tickers`.
+ * Cluster-aware reordering: all members of each correlation cluster appear
+ * consecutively, clusters sorted largest-first, solos at the end.
+ * Within each cluster, members are ordered by greedy nearest-neighbour
+ * so the highest-correlated pair leads.
  *
- * Algorithm: seed with the highest-corr pair, then greedily append the
- * unvisited ticker most correlated with the current tail.
+ * Returns the new index order into `tickers`.
  */
 export function reorderTickers(
   tickers: string[],
@@ -117,34 +118,43 @@ export function reorderTickers(
   const n = tickers.length;
   if (n <= 2) return tickers.map((_, i) => i);
 
-  // Find seed pair with highest absolute correlation
-  let seedI = 0, seedJ = 1, best = -Infinity;
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const r = isNaN(matrix[i][j]) ? 0 : Math.abs(matrix[i][j]);
-      if (r > best) { best = r; seedI = i; seedJ = j; }
-    }
-  }
+  const { clusters } = clusterTickers(tickers, matrix);
+  const tickerPos = new Map(tickers.map((tk, i) => [tk, i]));
 
-  const visited = new Set<number>([seedI, seedJ]);
-  const order: number[] = [seedI, seedJ];
+  const order: number[] = [];
 
-  while (order.length < n) {
-    const tail = order[order.length - 1];
-    let nextIdx = -1, nextScore = -Infinity;
-    for (let k = 0; k < n; k++) {
-      if (visited.has(k)) continue;
-      const score = isNaN(matrix[tail][k]) ? -1 : matrix[tail][k];
-      if (score > nextScore) { nextScore = score; nextIdx = k; }
-    }
-    if (nextIdx === -1) {
-      // Fallback: pick first unvisited (all NaN pairs)
-      for (let k = 0; k < n; k++) {
-        if (!visited.has(k)) { nextIdx = k; break; }
+  for (const group of clusters) {
+    const indices = group.map(tk => tickerPos.get(tk)!);
+    if (indices.length === 1) continue; // solos appended below
+
+    // Greedy nearest-neighbour within the cluster
+    let seedA = indices[0], seedB = indices[1], best = -Infinity;
+    for (let a = 0; a < indices.length; a++) {
+      for (let b = a + 1; b < indices.length; b++) {
+        const r = isNaN(matrix[indices[a]][indices[b]]) ? 0 : matrix[indices[a]][indices[b]];
+        if (r > best) { best = r; seedA = indices[a]; seedB = indices[b]; }
       }
     }
-    order.push(nextIdx!);
-    visited.add(nextIdx!);
+
+    const visited = new Set<number>([seedA, seedB]);
+    const clusterOrder = [seedA, seedB];
+    while (clusterOrder.length < indices.length) {
+      const tail = clusterOrder[clusterOrder.length - 1];
+      let next = -1, nextScore = -Infinity;
+      for (const idx of indices) {
+        if (visited.has(idx)) continue;
+        const score = isNaN(matrix[tail][idx]) ? -1 : matrix[tail][idx];
+        if (score > nextScore) { nextScore = score; next = idx; }
+      }
+      clusterOrder.push(next);
+      visited.add(next);
+    }
+    order.push(...clusterOrder);
+  }
+
+  // Append solos (single-member clusters)
+  for (let i = 0; i < n; i++) {
+    if (!order.includes(i)) order.push(i);
   }
 
   return order;

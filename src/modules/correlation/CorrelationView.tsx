@@ -332,23 +332,23 @@ export default function CorrelationView() {
       <div style={{ overflowX: "auto", overflowY: "auto" }}>
         <div style={{ display: "inline-block", minWidth: gridW }}>
 
-          {/* Column labels — colored by cluster */}
-          <div style={{ display: "flex", marginLeft: labelW, marginBottom: 4 }}>
+          {/* Column labels — vertical, colored by cluster */}
+          <div style={{ display: "flex", marginLeft: labelW, marginBottom: 4, alignItems: "flex-end", height: labelW }}>
             {tickers.map(tk => {
               const color = tickerColor.get(tk);
               return (
                 <div
                   key={tk}
-                  style={{ width: cellSize, flexShrink: 0, display: "flex", justifyContent: "center" }}
+                  style={{ width: cellSize, flexShrink: 0, display: "flex", justifyContent: "center", alignItems: "flex-end" }}
                 >
                   <span style={{
-                    display: "inline-block",
-                    transform: "rotate(-45deg) translateX(-4px)",
-                    transformOrigin: "center bottom",
+                    writingMode: "vertical-rl",
+                    transform: "rotate(180deg)",
                     fontSize: isMobile ? 9 : 11,
                     fontWeight: 700,
                     color: color ?? S.muted,
                     whiteSpace: "nowrap",
+                    lineHeight: 1,
                   }}>
                     {tk}
                   </span>
