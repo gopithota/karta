@@ -413,7 +413,7 @@ export default function CorrelationView() {
                       key={colTk}
                       onMouseEnter={e => handleCellEnter(e, i, j, r)}
                       onMouseLeave={() => setTooltip(null)}
-                      style={{ width: cellSize, height: cellSize, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isDiag ? corrColor(1) : corrColor(r), border: `1px solid ${S.bg}`, cursor: isDiag ? "default" : "crosshair", fontSize: isMobile ? 8 : 10, fontWeight: 700, color: corrTextColor(isDiag ? 1 : r), userSelect: "none", transition: "filter 0.1s", boxSizing: "border-box" }}
+                      style={{ width: cellSize, height: cellSize, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isDiag ? corrColor(1) : corrColor(r), border: `2px solid ${S.bg}`, borderRadius: 4, cursor: isDiag ? "default" : "crosshair", fontSize: isMobile ? 8 : 10, fontWeight: 700, color: corrTextColor(isDiag ? 1 : r), userSelect: "none", transition: "filter 0.1s", boxSizing: "border-box" }}
                       onMouseOver={e => { if (!isDiag) (e.currentTarget as HTMLDivElement).style.filter = "brightness(1.12)"; }}
                       onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.filter = ""; }}
                     >
@@ -446,12 +446,12 @@ export default function CorrelationView() {
       {/* Legend */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 20, flexWrap: "wrap" }}>
         <span style={{ fontSize: 11, color: S.muted }}>Scale:</span>
-        <div style={{ display: "flex", alignItems: "center", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
           {[-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1].map(v => (
             <div
               key={v}
               title={v.toFixed(2)}
-              style={{ width: 22, height: 12, background: corrColor(v) }}
+              style={{ width: 18, height: 12, background: corrColor(v), borderRadius: 3 }}
             />
           ))}
         </div>
