@@ -4,10 +4,35 @@ import {
   buildMatrix,
   reorderTickers,
   clusterTickers,
-  corrColor,
   corrTextColor,
 } from "./engine";
 import type { ClusterResult } from "./engine";
+
+// ── Colour palettes ──────────────────────────────────────────────────────────
+// Each entry: [label, positiveRGB, negativeRGB]
+// Mid-point (r=0) is always warm off-white [245,243,238].
+const PALETTES: [string, [number,number,number], [number,number,number]][] = [
+  ["Mustard / Blue",   [230, 168,  38], [ 65, 140, 210]],
+  ["Coral / Teal",     [215,  90,  72], [ 42, 168, 148]],
+  ["Lime / Violet",    [130, 188,  60], [145,  72, 190]],
+  ["Peach / Indigo",   [235, 135,  85], [ 75,  90, 195]],
+];
+
+function makeCellColor(pidx: number) {
+  const [, pos, neg] = PALETTES[pidx];
+  const mid: [number,number,number] = [245, 243, 238];
+  const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
+  return function cellColor(r: number): string {
+    if (isNaN(r)) return "rgba(100,100,100,0.12)";
+    if (r >= 0) {
+      const t = Math.min(r, 1);
+      return `rgb(${lerp(mid[0], pos[0], t)},${lerp(mid[1], pos[1], t)},${lerp(mid[2], pos[2], t)})`;
+    } else {
+      const t = Math.min(-r, 1);
+      return `rgb(${lerp(mid[0], neg[0], t)},${lerp(mid[1], neg[1], t)},${lerp(mid[2], neg[2], t)})`;
+    }
+  };
+}
 
 interface CellTooltip {
   i: number;
@@ -33,6 +58,8 @@ export default function CorrelationView() {
   const [clusters, setClusters] = useState<ClusterResult | null>(null);
   const [tooltip, setTooltip]   = useState<CellTooltip | null>(null);
   const [status, setStatus]     = useState<"idle" | "loading" | "ready" | "no-data" | "too-few">("idle");
+  const [paletteIdx, setPaletteIdx] = useState(0);
+  const corrColor = useMemo(() => makeCellColor(paletteIdx), [paletteIdx]);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Recompute whenever the correlation tab becomes active or candle data arrives
@@ -429,6 +456,13 @@ export default function CorrelationView() {
           ))}
         </div>
         <span style={{ fontSize: 11, color: S.muted }}>−1 inverse · 0 none · +1 perfect</span>
+        <button
+          onClick={() => setPaletteIdx(i => (i + 1) % PALETTES.length)}
+          title={`Palette: ${PALETTES[paletteIdx][0]} — click to cycle`}
+          style={{ marginLeft: 6, background: "none", border: `1px solid ${S.border}`, borderRadius: 6, padding: "2px 8px", fontSize: 11, color: S.muted, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+        >
+          ⟳ palette
+        </button>
       </div>
 
       {/* Tooltip */}
