@@ -55,7 +55,7 @@ export default function Header() {
   const handleTabClick = (key: TabKey) => {
     setTab(key);
     // force=true: show loading overlay on tab switch (matches old behavior)
-    if (key === "heatmap") tryAutoFetch(true);
+    if (key === "heatmap" || key === "correlation") tryAutoFetch(true);
   };
 
   const showToolbar = tab !== "setup" && tab !== "history";
@@ -116,12 +116,13 @@ export default function Header() {
               🔒 Local only
             </div>
           )}
-          {(["heatmap", "table", "history", "setup"] as TabKey[]).map(key => {
+          {(["heatmap", "correlation", "table", "history", "setup"] as TabKey[]).map(key => {
             const labels: Record<TabKey, { label: string; short: string }> = {
-              heatmap: { label: "Heatmap", short: "Map"   },
-              table:   { label: "Table",   short: "Table" },
-              history: { label: "History", short: "Hist"  },
-              setup:   { label: "Setup",   short: "Setup" },
+              heatmap:     { label: "Heatmap", short: "Map"  },
+              correlation: { label: "Corr",    short: "Corr" },
+              table:       { label: "Table",   short: "Tbl"  },
+              history:     { label: "History", short: "Hist" },
+              setup:       { label: "Setup",   short: "Setup"},
             };
             return (
               <button key={key} onClick={() => handleTabClick(key)} style={{ ...btnBase(tab === key), textTransform: "capitalize", padding: isMobile ? "5px 9px" : "5px 13px", fontSize: isMobile ? 12 : 13 }}>

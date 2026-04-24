@@ -1,5 +1,5 @@
 import Dexie, { type Table } from "dexie";
-import type { StockData } from "../types";
+import type { StockData, CandleSeries } from "../types";
 
 // ─── Schema ───────────────────────────────────────────────────────
 
@@ -9,23 +9,33 @@ export interface PriceCacheEntry {
   fetchedAt: number;    // Date.now() timestamp
 }
 
+export interface CandleCacheEntry {
+  ticker: string;       // primary key
+  series: CandleSeries; // timestamps + closes arrays
+  fetchedAt: number;    // Date.now() timestamp
+}
+
 // ─── Database ─────────────────────────────────────────────────────
 
 class KartaDB extends Dexie {
   priceCache!: Table<PriceCacheEntry, string>;
+  candleCache!: Table<CandleCacheEntry, string>;
 
   constructor() {
     super("karta-db");
     this.version(1).stores({
-      // ticker is the primary key; fetchedAt indexed for potential TTL queries
       priceCache: "ticker, fetchedAt",
+    });
+    this.version(2).stores({
+      priceCache: "ticker, fetchedAt",
+      candleCache: "ticker, fetchedAt",
     });
   }
 }
 
 export const db = new KartaDB();
 
-// ─── Helpers ──────────────────────────────────────────────────────
+// ─── Price cache helpers ──────────────────────────────────────────
 
 /** Load all cached price entries and return as a Record keyed by ticker. */
 export async function loadPriceCache(): Promise<Record<string, StockData>> {
@@ -59,4 +69,23 @@ export async function migrateLocalStoragePriceCache(): Promise<void> {
     // ignore corrupt data
   }
   localStorage.removeItem("ph_stockdata");
+}
+
+// ─── Candle cache helpers ─────────────────────────────────────────
+
+/** Save a single ticker's daily candle series. */
+export async function saveCandleCache(
+  ticker: string,
+  timestamps: number[],
+  closes: number[]
+): Promise<void> {
+  await db.candleCache.put({ ticker, series: { timestamps, closes }, fetchedAt: Date.now() });
+}
+
+/** Load all cached candle series as a Record keyed by ticker. */
+export async function loadCandleCache(): Promise<Record<string, CandleSeries>> {
+  const all = await db.candleCache.toArray();
+  const result: Record<string, CandleSeries> = {};
+  for (const entry of all) result[entry.ticker] = entry.series;
+  return result;
 }

@@ -109,7 +109,7 @@ export function tileFgColor(pct: number | null | undefined): TileFgColor {
 // ─── Demo detection ───────────────────────────────────────────────
 export const IS_DEMO = (key: string): boolean => {
   const saved = localStorage.getItem(key);
-  if (!saved) return true;
+  if (!saved) return false; // no custom save → DEFAULT_PORTFOLIO is loaded, treat as real
   try {
     const parsed = JSON.parse(saved);
     return !parsed || parsed.length === 0;

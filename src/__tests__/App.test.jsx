@@ -26,12 +26,13 @@ describe("initial render", () => {
     expect(screen.getByText("Portfolio Heatmap")).toBeInTheDocument();
   });
 
-  test("shows demo banner in demo mode", () => {
+  test("shows demo banner when portfolio is empty", () => {
+    localStorage.setItem("ph_portfolio", JSON.stringify([]));
     setup();
     expect(screen.getByText("Demo portfolio")).toBeInTheDocument();
   });
 
-  test("all four tabs are present", () => {
+  test("core tabs are present", () => {
     setup();
     // Use exact strings — regex would also match the demo hint "See table view" button
     expect(screen.getByRole("button", { name: "Heatmap" })).toBeInTheDocument();
@@ -84,6 +85,9 @@ describe("tab navigation", () => {
     const user = setup();
     // Visible on Heatmap
     expect(screen.getByRole("button", { name: /refresh/i })).toBeInTheDocument();
+    // Visible on Correlation (needs it to load candle data)
+    await user.click(screen.getByRole("button", { name: "Corr" }));
+    expect(screen.getByRole("button", { name: /refresh/i })).toBeInTheDocument();
     // Gone on Setup
     await user.click(screen.getByRole("button", { name: "Setup" }));
     expect(screen.queryByRole("button", { name: /refresh/i })).not.toBeInTheDocument();
@@ -98,7 +102,7 @@ describe("portfolio management", () => {
   // Navigate to Setup and clear the demo portfolio
   async function openSetupFresh(user) {
     await user.click(screen.getByRole("button", { name: "Setup" }));
-    await user.click(screen.getByRole("button", { name: /clear demo/i }));
+    await user.click(screen.getByRole("button", { name: /clear all/i }));
   }
 
   // Helper: type into SmartInput textarea and apply
@@ -461,10 +465,10 @@ describe("theme switcher", () => {
 // ─── Demo mode transitions ────────────────────────────────────────
 describe("demo mode", () => {
   test("exits demo mode after adding a real stock", async () => {
+    localStorage.setItem("ph_portfolio", JSON.stringify([]));
     const user = setup();
     expect(screen.getByText("Demo portfolio")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Setup" }));
-    await user.click(screen.getByRole("button", { name: /clear demo/i }));
     await user.type(screen.getByPlaceholderText(/AAPL 100/), "AAPL 10");
     await user.click(screen.getByRole("button", { name: /apply changes/i }));
     await user.click(screen.getByRole("button", { name: "Heatmap" }));

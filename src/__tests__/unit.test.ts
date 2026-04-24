@@ -186,8 +186,8 @@ describe("tileFgColor", () => {
 describe("IS_DEMO", () => {
   beforeEach(() => localStorage.clear());
 
-  test("returns true when nothing stored", () => {
-    expect(IS_DEMO("ph_portfolio")).toBe(true);
+  test("returns false when nothing stored (default portfolio is real)", () => {
+    expect(IS_DEMO("ph_portfolio")).toBe(false);
   });
 
   test("returns true for stored empty array", () => {

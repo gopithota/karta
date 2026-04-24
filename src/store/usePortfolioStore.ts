@@ -1,10 +1,11 @@
 import { create } from "zustand";
 import { THEMES } from "../theme";
 import { IS_DEMO, applySnapshot, applyEvent } from "../utils";
-import { savePriceCache } from "../services/db";
+import { savePriceCache, saveCandleCache } from "../services/db";
 import type {
   PortfolioItem,
   StockData,
+  CandleSeries,
   HistoryEntry,
   PortfolioEvent,
   EventType,
@@ -17,17 +18,23 @@ import type {
 
 // ─── Default portfolio ────────────────────────────────────────────
 
+// Stocks chosen to form ~4 natural correlation clusters:
+//   Tech/Semis: NVDA + AMD          (highly correlated AI-chip plays)
+//   Mega Tech:  MSFT + META + GOOG  (large-cap software/ads)
+//   Finance:    JPM + BAC            (bank cycle)
+//   Energy:     XOM + CVX            (oil-price driven)
+//   Solo:       UNH                  (healthcare, low correlation to others)
 export const DEFAULT_PORTFOLIO: PortfolioItem[] = [
-  { ticker: "AMD",   shares: 20, demoPerf:  9.1  },
-  { ticker: "NVDA",  shares: 22, demoPerf:  8.4  },
-  { ticker: "META",  shares: 20, demoPerf:  6.8  },
-  { ticker: "MSFT",  shares: 20, demoPerf:  3.7  },
-  { ticker: "JPM",   shares: 30, demoPerf:  0.9  },
-  { ticker: "AAPL",  shares: 28, demoPerf: -1.1  },
-  { ticker: "AMZN",  shares: 18, demoPerf: -2.3  },
-  { ticker: "UNH",   shares: 10, demoPerf: -3.8  },
-  { ticker: "XOM",   shares: 22, demoPerf: -5.2  },
-  { ticker: "TSLA",  shares: 25, demoPerf: -7.5  },
+  { ticker: "NVDA",  shares: 20, demoPerf:  11.2 },
+  { ticker: "AMD",   shares: 30, demoPerf:   8.7 },
+  { ticker: "MSFT",  shares: 18, demoPerf:   4.1 },
+  { ticker: "META",  shares: 16, demoPerf:   5.9 },
+  { ticker: "GOOG",  shares: 14, demoPerf:   3.3 },
+  { ticker: "JPM",   shares: 28, demoPerf:   1.4 },
+  { ticker: "BAC",   shares: 60, demoPerf:  -0.8 },
+  { ticker: "XOM",   shares: 22, demoPerf:  -2.6 },
+  { ticker: "CVX",   shares: 18, demoPerf:  -4.1 },
+  { ticker: "UNH",   shares: 10, demoPerf:  -6.3 },
 ];
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -59,6 +66,8 @@ interface PortfolioState {
 
   // Stock data
   stockData: Record<string, StockData>;
+  candleData: Record<string, CandleSeries>;
+  sectorData: Record<string, string>;  // ticker → finnhubIndustry
   loading: boolean;
   fetchErrors: Record<string, string>;
   rateLimitSecs: number;
@@ -100,6 +109,7 @@ interface PortfolioState {
   fetchData: (key?: string, force?: boolean) => Promise<void>;
   tryAutoFetch: (force?: boolean) => void;
   hydrateStockData: (data: Record<string, StockData>) => void;
+  hydrateCandleData: (data: Record<string, CandleSeries>) => void;
 
   // Actions — history
   setHistory: (history: HistoryEntry[] | ((prev: HistoryEntry[]) => HistoryEntry[])) => void;
@@ -163,6 +173,8 @@ export function resetStore() {
     portfolio: loadPortfolio(),
     isDemo: IS_DEMO("ph_portfolio"),
     stockData: loadStockData(),
+    candleData: {},
+    sectorData: {},
     loading: false,
     fetchErrors: {},
     rateLimitSecs: 0,
@@ -196,6 +208,8 @@ export const usePortfolioStore = create<PortfolioState>()((set, get) => ({
 
   // ── Stock data ────────────────────────────────────────────────────
   stockData: loadStockData(),
+  candleData: {},
+  sectorData: {},
   loading: false,
   fetchErrors: {},
   rateLimitSecs: 0,
@@ -237,8 +251,7 @@ export const usePortfolioStore = create<PortfolioState>()((set, get) => ({
 
   setPortfolio: (portfolio) => {
     localStorage.setItem("ph_portfolio", JSON.stringify(portfolio));
-    const isDemo = portfolio.length === 0 ||
-      JSON.stringify(portfolio) === JSON.stringify(DEFAULT_PORTFOLIO);
+    const isDemo = portfolio.length === 0;
     set({ portfolio, isDemo });
   },
 
@@ -275,6 +288,11 @@ export const usePortfolioStore = create<PortfolioState>()((set, get) => ({
   // ── Hydrate stockData from Dexie on initial load ──────────────────
   hydrateStockData: (data) => set(s => ({
     stockData: Object.keys(s.stockData).length > 0 ? s.stockData : data,
+  })),
+
+  // ── Hydrate candleData from Dexie on initial load ─────────────────
+  hydrateCandleData: (data) => set(s => ({
+    candleData: Object.keys(s.candleData).length > 0 ? s.candleData : data,
   })),
 
   // ── Auto-fetch (throttled, for mount + tab click) ─────────────────
@@ -378,6 +396,28 @@ export const usePortfolioStore = create<PortfolioState>()((set, get) => ({
         };
         collected[ticker] = entry;
         set(s => ({ stockData: { ...s.stockData, [ticker]: entry } }));
+
+        // Fetch daily closes (Yahoo Finance) and sector profile (Finnhub) in parallel
+        try {
+          const [hr, pr] = await Promise.all([
+            fetch(`/api/historical?ticker=${ticker}`),
+            fetch(`/api/profile?ticker=${ticker}`),
+          ]);
+          if (hr.ok) {
+            const hist = await hr.json() as { s?: string; t?: number[]; c?: number[] };
+            if (hist.s !== "no_data" && hist.t?.length && hist.c?.length) {
+              const series = { timestamps: hist.t, closes: hist.c };
+              set(s => ({ candleData: { ...s.candleData, [ticker]: series } }));
+              saveCandleCache(ticker, hist.t, hist.c).catch(() => {});
+            }
+          }
+          if (pr.ok) {
+            const prof = await pr.json() as { industry?: string | null };
+            if (prof.industry) {
+              set(s => ({ sectorData: { ...s.sectorData, [ticker]: prof.industry! } }));
+            }
+          }
+        } catch { /* best-effort */ }
       } catch (e) {
         if (!useShared) {
           const msg = e instanceof Error ? e.message : String(e);

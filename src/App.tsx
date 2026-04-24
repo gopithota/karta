@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { usePortfolioStore } from "./store/usePortfolioStore";
-import { migrateLocalStoragePriceCache, loadPriceCache } from "./services/db";
+import { migrateLocalStoragePriceCache, loadPriceCache, loadCandleCache } from "./services/db";
 import Header from "./components/Header";
 import HeatmapView from "./modules/heatmap/HeatmapView";
+import CorrelationView from "./modules/correlation/CorrelationView";
 import TableView from "./modules/table/TableView";
 import HistoryView from "./modules/history/HistoryView";
 import SetupView from "./modules/setup/SetupView";
@@ -17,6 +18,7 @@ export default function App() {
   const setRateLimitSecs   = usePortfolioStore(s => s.setRateLimitSecs);
   const tryAutoFetch       = usePortfolioStore(s => s.tryAutoFetch);
   const hydrateStockData   = usePortfolioStore(s => s.hydrateStockData);
+  const hydrateCandleData  = usePortfolioStore(s => s.hydrateCandleData);
 
   // Sync body background with theme
   useEffect(() => { document.body.style.background = S.bg; }, [S.bg]);
@@ -40,8 +42,9 @@ export default function App() {
     (async () => {
       try {
         await migrateLocalStoragePriceCache();
-        const cached = await loadPriceCache();
+        const [cached, candles] = await Promise.all([loadPriceCache(), loadCandleCache()]);
         if (Object.keys(cached).length > 0) hydrateStockData(cached);
+        if (Object.keys(candles).length > 0) hydrateCandleData(candles);
       } catch {
         // IndexedDB unavailable (e.g., Safari private, test env) — prices stay in memory
       }
@@ -80,6 +83,9 @@ export default function App() {
       <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
         <div style={{ position: "absolute", inset: 0, display: tab === "heatmap" ? "block" : "none" }}>
           <HeatmapView />
+        </div>
+        <div style={{ position: "absolute", inset: 0, display: tab === "correlation" ? "flex" : "none", flexDirection: "column" }}>
+          <CorrelationView />
         </div>
         <div style={{ position: "absolute", inset: 0, display: tab === "table" ? "block" : "none" }}>
           <TableView />

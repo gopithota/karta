@@ -146,4 +146,11 @@ export interface ApplyResult {
 
 // ─── Tab types ────────────────────────────────────────────────────
 
-export type TabKey = "heatmap" | "table" | "history" | "setup";
+export type TabKey = "heatmap" | "correlation" | "table" | "history" | "setup";
+
+// ─── Correlation types ────────────────────────────────────────────
+
+export interface CandleSeries {
+  timestamps: number[];  // Unix seconds, sorted ascending
+  closes: number[];
+}

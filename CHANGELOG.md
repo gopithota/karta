@@ -1,5 +1,40 @@
 # Karta — Changelog
 
+## v1.1.0 — 2026-04-23
+
+### Correlation Tab
+
+**New tab — return correlation matrix**
+- Pearson correlation matrix built from daily log returns (1-year lookback via Yahoo Finance)
+- Tickers reordered with greedy nearest-neighbour so correlated clusters appear as diagonal blocks
+- Indigo ↔ warm-white ↔ crimson diverging colour scale; axis labels coloured by cluster membership
+- Hover tooltip shows pair correlation (r), and 1-year returns for both tickers
+
+**Cluster detection & summary card**
+- Union-find clustering groups tickers where r ≥ 0.6
+- Summary card above the matrix shows each cluster's sector label, portfolio weight %, and pill chips
+- Sector labels sourced from Finnhub `/stock/profile2` (majority industry within each cluster); falls back to top-ticker names if sector data is unavailable
+- Solo (unclustered) stocks shown in a separate dimmed row with their combined portfolio %
+
+**New API endpoints**
+- `api/historical.js` — Yahoo Finance v8 daily closes proxy (1-year, no API key required); replaces the paywalled Finnhub candle endpoint. CDN-cached 1 hour
+- `api/profile.js` — Finnhub `/stock/profile2` proxy returning `{ name, industry }`; KV-cached 24 hours. Fetched in parallel with historical data on each Refresh
+
+**Infrastructure**
+- `CandleSeries` type added (`timestamps[]`, `closes[]`)
+- `candleCache` Dexie table (same IndexedDB pattern as `priceCache`); candle data survives page reloads
+- `sectorData` Zustand slice — populated alongside candle data on each fetch, no persistence needed (server-cached)
+- Correlation tab triggers `tryAutoFetch` on tab click, same as Heatmap
+
+**Default portfolio updated**
+- 10 stocks chosen to form four natural correlation clusters: NVDA + AMD (Semiconductors), MSFT + META + GOOG (Mega Tech), JPM + BAC (Banks), XOM + CVX (Energy), UNH solo (Health Care)
+- Demonstrates cluster detection out of the box without any setup
+
+**Bug fixes**
+- Default portfolio was incorrectly treated as demo mode — daily history snapshots now record and Refresh fires normally for first-time users
+- Refresh button was hidden on the Correlation tab — now visible on all data tabs
+- React Router v7 `future` flag warnings silenced
+
 ## v0.6.0 — 2026-04-18
 
 ### Smart Input, Annotation Editing & Setup Redesign
