@@ -207,7 +207,7 @@ export function clusterTickers(
 
 /**
  * Map a correlation value in [-1, 1] to an RGB string.
- * Matte steel-blue → warm off-white → matte burnt-amber diverging scale.
+ * Cornflower blue → warm off-white → golden mustard diverging scale.
  */
 export function corrColor(r: number): string {
   if (isNaN(r)) return "rgba(100,100,100,0.12)";
@@ -218,12 +218,12 @@ export function corrColor(r: number): string {
 
   if (r >= 0) {
     const t = Math.min(r, 1);
-    // warm off-white → matte burnt amber (desaturated orange)
-    return `rgb(${lerp(mid[0], 180, t)},${lerp(mid[1], 95, t)},${lerp(mid[2], 35, t)})`;
+    // warm off-white → bright golden mustard
+    return `rgb(${lerp(mid[0], 230, t)},${lerp(mid[1], 168, t)},${lerp(mid[2], 38, t)})`;
   } else {
     const t = Math.min(-r, 1);
-    // warm off-white → matte steel blue (desaturated, not electric)
-    return `rgb(${lerp(mid[0], 45, t)},${lerp(mid[1], 90, t)},${lerp(mid[2], 158, t)})`;
+    // warm off-white → bright cornflower blue
+    return `rgb(${lerp(mid[0], 65, t)},${lerp(mid[1], 140, t)},${lerp(mid[2], 210, t)})`;
   }
 }
 
