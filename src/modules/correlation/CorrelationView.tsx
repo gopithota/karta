@@ -146,6 +146,20 @@ export default function CorrelationView() {
     </div>
   );
 
+  // ── Gap helpers ───────────────────────────────────────────────────
+  // A gap is inserted between ticker[i] and ticker[i+1] when they belong to
+  // different clusters. Solo→solo never gets a gap.
+  const gapSize = Math.round(cellSize / 2);
+  const isBoundaryAfter = (i: number): boolean => {
+    if (i >= tickers.length - 1) return false;
+    const a = tickerColor.get(tickers[i]);
+    const b = tickerColor.get(tickers[i + 1]);
+    if (a === undefined && b === undefined) return false; // both solo
+    return a !== b;
+  };
+  const gapCount  = tickers.reduce((c, _, i) => c + (isBoundaryAfter(i) ? 1 : 0), 0);
+  const totalGridW = labelW + n * cellSize + gapCount * gapSize;
+
   // ── Main matrix view ──────────────────────────────────────────────
   return (
     <div
@@ -330,83 +344,74 @@ export default function CorrelationView() {
 
       {/* Matrix */}
       <div style={{ overflowX: "auto", overflowY: "auto" }}>
-        <div style={{ display: "inline-block", minWidth: gridW }}>
+        <div style={{ display: "inline-block", minWidth: totalGridW }}>
 
-          {/* Column labels — vertical, colored by cluster */}
+          {/* Column labels — vertical, with gap columns between clusters */}
           <div style={{ display: "flex", marginLeft: labelW, marginBottom: 4, alignItems: "flex-end", height: labelW }}>
-            {tickers.map(tk => {
+            {tickers.flatMap((tk, j) => {
               const color = tickerColor.get(tk);
-              return (
-                <div
-                  key={tk}
-                  style={{ width: cellSize, flexShrink: 0, display: "flex", justifyContent: "center", alignItems: "flex-end" }}
-                >
-                  <span style={{
-                    writingMode: "vertical-rl",
-                    transform: "rotate(180deg)",
-                    fontSize: isMobile ? 9 : 11,
-                    fontWeight: 700,
-                    color: color ?? S.muted,
-                    whiteSpace: "nowrap",
-                    lineHeight: 1,
-                  }}>
+              const label = (
+                <div key={tk} style={{ width: cellSize, flexShrink: 0, display: "flex", justifyContent: "center", alignItems: "flex-end" }}>
+                  <span style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", fontSize: isMobile ? 9 : 11, fontWeight: 700, color: color ?? S.muted, whiteSpace: "nowrap", lineHeight: 1 }}>
                     {tk}
                   </span>
                 </div>
               );
+              const gap = isBoundaryAfter(j) ? (
+                <div key={`gh-${j}`} style={{ width: gapSize, flexShrink: 0, display: "flex", justifyContent: "center", alignItems: "flex-end", paddingBottom: 4 }}>
+                  <div style={{ width: 1, height: "55%", background: S.border }} />
+                </div>
+              ) : null;
+              return [label, ...(gap ? [gap] : [])];
             })}
           </div>
 
-          {/* Rows */}
-          {tickers.map((rowTk, i) => {
+          {/* Rows — with gap rows between clusters and gap columns within each row */}
+          {tickers.flatMap((rowTk, i) => {
             const rowColor = tickerColor.get(rowTk);
-            return (
+
+            const row = (
               <div key={rowTk} style={{ display: "flex", alignItems: "center" }}>
-                {/* Row label — colored by cluster */}
-                <div style={{
-                  width: labelW, flexShrink: 0, textAlign: "right",
-                  paddingRight: 8, fontSize: isMobile ? 9 : 11,
-                  fontWeight: 700,
-                  color: rowColor ?? S.muted,
-                }}>
+                {/* Row label */}
+                <div style={{ width: labelW, flexShrink: 0, textAlign: "right", paddingRight: 8, fontSize: isMobile ? 9 : 11, fontWeight: 700, color: rowColor ?? S.muted }}>
                   {rowTk}
                 </div>
 
-                {/* Cells */}
-                {tickers.map((colTk, j) => {
+                {/* Cells with gap columns */}
+                {tickers.flatMap((colTk, j) => {
                   const r = matrix[i]?.[j] ?? NaN;
                   const isDiag = i === j;
-                  return (
+                  const cell = (
                     <div
                       key={colTk}
                       onMouseEnter={e => handleCellEnter(e, i, j, r)}
                       onMouseLeave={() => setTooltip(null)}
-                      style={{
-                        width: cellSize, height: cellSize, flexShrink: 0,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        background: isDiag ? corrColor(1) : corrColor(r),
-                        border: `1px solid ${S.bg}`,
-                        cursor: isDiag ? "default" : "crosshair",
-                        fontSize: isMobile ? 8 : 10,
-                        fontWeight: 700,
-                        color: corrTextColor(isDiag ? 1 : r),
-                        userSelect: "none",
-                        transition: "filter 0.1s",
-                        boxSizing: "border-box",
-                      }}
-                      onMouseOver={e => {
-                        if (!isDiag) (e.currentTarget as HTMLDivElement).style.filter = "brightness(1.12)";
-                      }}
-                      onMouseOut={e => {
-                        (e.currentTarget as HTMLDivElement).style.filter = "";
-                      }}
+                      style={{ width: cellSize, height: cellSize, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isDiag ? corrColor(1) : corrColor(r), border: `1px solid ${S.bg}`, cursor: isDiag ? "default" : "crosshair", fontSize: isMobile ? 8 : 10, fontWeight: 700, color: corrTextColor(isDiag ? 1 : r), userSelect: "none", transition: "filter 0.1s", boxSizing: "border-box" }}
+                      onMouseOver={e => { if (!isDiag) (e.currentTarget as HTMLDivElement).style.filter = "brightness(1.12)"; }}
+                      onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.filter = ""; }}
                     >
                       {!isMobile && (isDiag ? "1.00" : (!isNaN(r) ? fmt(r) : ""))}
                     </div>
                   );
+                  const colGap = isBoundaryAfter(j) ? (
+                    <div key={`gc-${j}`} style={{ width: gapSize, height: cellSize, flexShrink: 0, display: "flex", justifyContent: "center" }}>
+                      <div style={{ width: 1, height: "100%", background: S.border }} />
+                    </div>
+                  ) : null;
+                  return [cell, ...(colGap ? [colGap] : [])];
                 })}
               </div>
             );
+
+            // Horizontal gap row between cluster groups
+            const rowGap = isBoundaryAfter(i) ? (
+              <div key={`gr-${i}`} style={{ display: "flex", height: gapSize, alignItems: "center" }}>
+                <div style={{ width: labelW, flexShrink: 0 }} />
+                <div style={{ flex: 1, height: 1, background: S.border }} />
+              </div>
+            ) : null;
+
+            return [row, ...(rowGap ? [rowGap] : [])];
           })}
         </div>
       </div>
