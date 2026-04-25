@@ -1,23 +1,26 @@
 import { useMemo } from "react";
 import { usePortfolioStore } from "../store/usePortfolioStore";
-import type { TabKey } from "../types";
+import type { TabKey, HeatmapView } from "../types";
 
 export default function Header() {
-  const S             = usePortfolioStore(s => s.S);
-  const tab           = usePortfolioStore(s => s.tab);
-  const setTab        = usePortfolioStore(s => s.setTab);
-  const portfolioName = usePortfolioStore(s => s.portfolioName);
-  const portfolio     = usePortfolioStore(s => s.portfolio);
-  const stockData     = usePortfolioStore(s => s.stockData);
-  const loading       = usePortfolioStore(s => s.loading);
-  const privacyMode   = usePortfolioStore(s => s.privacyMode);
+  const S              = usePortfolioStore(s => s.S);
+  const tab            = usePortfolioStore(s => s.tab);
+  const setTab         = usePortfolioStore(s => s.setTab);
+  const portfolioName  = usePortfolioStore(s => s.portfolioName);
+  const portfolio      = usePortfolioStore(s => s.portfolio);
+  const stockData      = usePortfolioStore(s => s.stockData);
+  const loading        = usePortfolioStore(s => s.loading);
+  const privacyMode    = usePortfolioStore(s => s.privacyMode);
   const setPrivacyMode = usePortfolioStore(s => s.setPrivacyMode);
-  const isMobile      = usePortfolioStore(s => s.isMobile);
-  const rateLimitSecs = usePortfolioStore(s => s.rateLimitSecs);
-  const fetchData     = usePortfolioStore(s => s.fetchData);
-  const fetchErrors   = usePortfolioStore(s => s.fetchErrors);
-  const apiKey        = usePortfolioStore(s => s.apiKey);
-  const tryAutoFetch  = usePortfolioStore(s => s.tryAutoFetch);
+  const isMobile       = usePortfolioStore(s => s.isMobile);
+  const rateLimitSecs  = usePortfolioStore(s => s.rateLimitSecs);
+  const fetchData      = usePortfolioStore(s => s.fetchData);
+  const fetchErrors    = usePortfolioStore(s => s.fetchErrors);
+  const apiKey         = usePortfolioStore(s => s.apiKey);
+  const tryAutoFetch   = usePortfolioStore(s => s.tryAutoFetch);
+  const watchlists     = usePortfolioStore(s => s.watchlists);
+  const heatmapView    = usePortfolioStore(s => s.heatmapView);
+  const setHeatmapView = usePortfolioStore(s => s.setHeatmapView);
 
   const getWeight = (ticker: string) => {
     const d = stockData[ticker];
@@ -54,17 +57,53 @@ export default function Header() {
 
   const handleTabClick = (key: TabKey) => {
     setTab(key);
-    // force=true: show loading overlay on tab switch (matches old behavior)
     if (key === "heatmap" || key === "correlation") tryAutoFetch(true);
   };
+
+  // ── View slider ──────────────────────────────────────────────────
+  const viewSegs: { key: HeatmapView; label: string }[] = [
+    { key: "portfolio", label: "Portfolio" },
+    ...watchlists
+      .filter(w => w.tickers.length > 0)
+      .map(w => ({ key: `watchlist${w.id}` as HeatmapView, label: w.name || `Watchlist ${w.id}` })),
+  ];
+  const showSlider = tab === "heatmap" && viewSegs.length >= 2;
+  const activeIdx  = Math.max(0, viewSegs.findIndex(s => s.key === heatmapView));
+  const PILL_PAD   = 2;
+
+  // ── Tab visibility ───────────────────────────────────────────────
+  const activeWatchlistName = heatmapView !== "portfolio"
+    ? (watchlists.find(w => `watchlist${w.id}` === heatmapView)?.name || `Watchlist ${heatmapView.replace("watchlist", "")}`)
+    : null;
+
+  const TAB_LABELS: Record<TabKey, { label: string; short: string }> = {
+    heatmap:     { label: activeWatchlistName ?? "Heatmap", short: activeWatchlistName ?? "Map" },
+    correlation: { label: "Corr",    short: "Corr" },
+    table:       { label: "Table",   short: "Tbl"  },
+    history:     { label: "History", short: "Hist" },
+    setup:       { label: "Setup",   short: "Setup"},
+  };
+  const visibleTabs: TabKey[] = heatmapView !== "portfolio"
+    ? ["heatmap", "setup"]
+    : ["heatmap", "correlation", "table", "history", "setup"];
 
   const showToolbar = tab !== "setup" && tab !== "history";
   const showNudge   = !apiKey && showToolbar;
 
   return (
     <>
-      {/* Header bar */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "8px 12px" : "12px 18px", borderBottom: `1px solid ${S.border}`, flexShrink: 0, gap: 8 }}>
+      {/* ── Header bar ──────────────────────────────────────────── */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "1fr auto 1fr",
+        alignItems: "center",
+        padding: isMobile ? "8px 12px" : "12px 18px",
+        borderBottom: `1px solid ${S.border}`,
+        flexShrink: 0,
+        gap: 8,
+      }}>
+
+        {/* Left: logo + return + value */}
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 12, minWidth: 0 }}>
           <a href="/" title="Back to Karta home" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none", color: "inherit", minWidth: 0 }}>
             <svg width="22" height="22" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
@@ -110,30 +149,74 @@ export default function Header() {
           )}
         </div>
 
-        <div style={{ display: "flex", gap: isMobile ? 3 : 4, alignItems: "center", flexShrink: 0 }}>
+        {/* Center: sliding view selector */}
+        <div>
+          {showSlider && (
+            <div style={{
+              position: "relative",
+              display: "flex",
+              background: S.bg,
+              border: `1px solid ${S.border}`,
+              borderRadius: 9,
+              padding: `${PILL_PAD}px`,
+            }}>
+              {/* Animated pill */}
+              <div style={{
+                position: "absolute",
+                top: PILL_PAD, bottom: PILL_PAD, left: PILL_PAD,
+                width: `calc((100% - ${PILL_PAD * 2}px) / ${viewSegs.length})`,
+                background: S.tabActiveBg,
+                borderRadius: 6,
+                border: `1px solid ${S.tabActiveBorder}`,
+                transform: `translateX(calc(${activeIdx} * 100%))`,
+                transition: "transform 0.22s cubic-bezier(0.4, 0, 0.2, 1)",
+                pointerEvents: "none",
+                zIndex: 0,
+              }} />
+              {viewSegs.map(seg => (
+                <button
+                  key={seg.key}
+                  onClick={() => setHeatmapView(seg.key)}
+                  style={{
+                    position: "relative", zIndex: 1,
+                    flex: 1,
+                    padding: isMobile ? "3px 10px" : "4px 16px",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: isMobile ? 11 : 12,
+                    fontWeight: heatmapView === seg.key ? 700 : 500,
+                    background: "transparent",
+                    color: heatmapView === seg.key ? S.tabActiveText : S.muted,
+                    transition: "color 0.22s",
+                    whiteSpace: "nowrap",
+                    minWidth: isMobile ? 58 : 72,
+                    borderRadius: 6,
+                  }}
+                >
+                  {seg.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Right: lock badge + tab buttons */}
+        <div style={{ display: "flex", gap: isMobile ? 3 : 4, alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>
           {!isMobile && (
             <div title="Your portfolio is stored locally in your browser only. Nothing is sent to our servers." style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(74,222,128,0.2)", background: S.greenDim, fontSize: 11, color: S.green, fontWeight: 600, cursor: "default", letterSpacing: "0.02em" }}>
               🔒 Local only
             </div>
           )}
-          {(["heatmap", "correlation", "table", "history", "setup"] as TabKey[]).map(key => {
-            const labels: Record<TabKey, { label: string; short: string }> = {
-              heatmap:     { label: "Heatmap", short: "Map"  },
-              correlation: { label: "Corr",    short: "Corr" },
-              table:       { label: "Table",   short: "Tbl"  },
-              history:     { label: "History", short: "Hist" },
-              setup:       { label: "Setup",   short: "Setup"},
-            };
-            return (
-              <button key={key} onClick={() => handleTabClick(key)} style={{ ...btnBase(tab === key), textTransform: "capitalize", padding: isMobile ? "5px 9px" : "5px 13px", fontSize: isMobile ? 12 : 13 }}>
-                {isMobile ? labels[key].short : labels[key].label}
-              </button>
-            );
-          })}
+          {visibleTabs.map(key => (
+            <button key={key} onClick={() => handleTabClick(key)} style={{ ...btnBase(tab === key), textTransform: "capitalize", padding: isMobile ? "5px 9px" : "5px 13px", fontSize: isMobile ? 12 : 13 }}>
+              {isMobile ? TAB_LABELS[key].short : TAB_LABELS[key].label}
+            </button>
+          ))}
         </div>
+
       </div>
 
-      {/* Toolbar */}
+      {/* ── Toolbar ─────────────────────────────────────────────── */}
       {showToolbar && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderBottom: `1px solid ${S.border}`, flexShrink: 0 }}>
           <div style={{ flex: 1 }} />
@@ -152,7 +235,7 @@ export default function Header() {
         </div>
       )}
 
-      {/* Shared-key nudge */}
+      {/* ── Shared-key nudge ────────────────────────────────────── */}
       {showNudge && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "5px 18px", flexShrink: 0, background: "rgba(59,130,246,0.05)", borderBottom: "1px solid rgba(59,130,246,0.1)", fontSize: 12, color: S.muted }}>
           {rateLimitSecs > 0 ? (

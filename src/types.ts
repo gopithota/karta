@@ -144,6 +144,25 @@ export interface ApplyResult {
   errors: ParseError[];
 }
 
+// ─── News types ───────────────────────────────────────────────────
+
+export interface NewsItem {
+  headline: string;
+  url: string;
+  source: string;
+  datetime: number; // unix seconds
+}
+
+// ─── Watchlist types ──────────────────────────────────────────────
+
+export interface Watchlist {
+  id: 1 | 2;
+  name: string;
+  tickers: string[];
+}
+
+export type HeatmapView = "portfolio" | "watchlist1" | "watchlist2";
+
 // ─── Tab types ────────────────────────────────────────────────────
 
 export type TabKey = "heatmap" | "correlation" | "table" | "history" | "setup";

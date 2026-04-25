@@ -14,6 +14,9 @@ import type {
   ThemeKey,
   Theme,
   TreemapRect,
+  Watchlist,
+  HeatmapView,
+  NewsItem,
 } from "../types";
 
 // ─── Default portfolio ────────────────────────────────────────────
@@ -80,6 +83,12 @@ interface PortfolioState {
   apiKey: string;
   apiInput: string;
 
+  // Watchlists
+  watchlists: Watchlist[];
+  heatmapView: HeatmapView;
+  watchlistLoading: boolean;
+  watchlistNews: Record<string, NewsItem[]>;
+
   // Event editing
   editingEventIdx: number | null;
   editingNote: string;
@@ -107,9 +116,14 @@ interface PortfolioState {
 
   // Actions — data
   fetchData: (key?: string, force?: boolean) => Promise<void>;
+  fetchWatchlistData: (force?: boolean) => Promise<void>;
   tryAutoFetch: (force?: boolean) => void;
   hydrateStockData: (data: Record<string, StockData>) => void;
   hydrateCandleData: (data: Record<string, CandleSeries>) => void;
+
+  // Actions — watchlists
+  setWatchlists: (watchlists: Watchlist[]) => void;
+  setHeatmapView: (view: HeatmapView) => void;
 
   // Actions — history
   setHistory: (history: HistoryEntry[] | ((prev: HistoryEntry[]) => HistoryEntry[])) => void;
@@ -143,6 +157,16 @@ function loadHistory(): HistoryEntry[] {
 function loadEvents(): PortfolioEvent[] {
   try { return JSON.parse(localStorage.getItem("ph_events") || "") || []; }
   catch { return []; }
+}
+
+const DEFAULT_WATCHLISTS: Watchlist[] = [
+  { id: 1, name: "Watchlist 1", tickers: [] },
+  { id: 2, name: "Watchlist 2", tickers: [] },
+];
+
+function loadWatchlists(): Watchlist[] {
+  try { return JSON.parse(localStorage.getItem("ph_watchlists") || "") || DEFAULT_WATCHLISTS; }
+  catch { return DEFAULT_WATCHLISTS; }
 }
 
 function loadStockData(): Record<string, StockData> {
@@ -182,6 +206,10 @@ export function resetStore() {
     portfolioEvents: loadEvents(),
     apiKey: localStorage.getItem("ph_apikey") || "",
     apiInput: localStorage.getItem("ph_apikey") || "",
+    watchlists: loadWatchlists(),
+    heatmapView: "portfolio",
+    watchlistLoading: false,
+    watchlistNews: {},
     editingEventIdx: null,
     editingNote: "",
     hoveredEventIdx: null,
@@ -221,6 +249,12 @@ export const usePortfolioStore = create<PortfolioState>()((set, get) => ({
   // ── API key ───────────────────────────────────────────────────────
   apiKey: localStorage.getItem("ph_apikey") || "",
   apiInput: localStorage.getItem("ph_apikey") || "",
+
+  // ── Watchlists ────────────────────────────────────────────────────
+  watchlists: loadWatchlists(),
+  heatmapView: "portfolio" as HeatmapView,
+  watchlistLoading: false,
+  watchlistNews: {},
 
   // ── Event editing ─────────────────────────────────────────────────
   editingEventIdx: null,
@@ -280,6 +314,14 @@ export const usePortfolioStore = create<PortfolioState>()((set, get) => ({
   },
   setApiInput: (apiInput) => set({ apiInput }),
 
+  // ── Watchlist actions ─────────────────────────────────────────────
+  setWatchlists: (watchlists) => {
+    localStorage.setItem("ph_watchlists", JSON.stringify(watchlists));
+    set({ watchlists });
+  },
+
+  setHeatmapView: (heatmapView) => set({ heatmapView }),
+
   // ── Rate limit ────────────────────────────────────────────────────
   setRateLimitSecs: (secs) => set(s => ({
     rateLimitSecs: typeof secs === "function" ? secs(s.rateLimitSecs) : secs,
@@ -303,6 +345,76 @@ export const usePortfolioStore = create<PortfolioState>()((set, get) => ({
     if (loading || rateLimitSecs > 0) return;
     if (Date.now() - lastFetchTime <= 15 * 60 * 1000) return;
     fetchData(apiKey || "", force);
+  },
+
+  // ── Fetch quotes + candles + news for watchlist tickers ──────────
+  fetchWatchlistData: async (force = false) => {
+    const { watchlists, apiKey, stockData, candleData, watchlistNews } = get();
+    const allTickers = [...new Set(watchlists.flatMap(w => w.tickers))];
+    if (!allTickers.length) return;
+
+    const useShared = !apiKey;
+    const needsQuote   = force ? allTickers : allTickers.filter(t => !stockData[t]);
+    const needsCandles = force ? allTickers : allTickers.filter(t => !candleData[t]);
+    const needsNews    = force ? allTickers : allTickers.filter(t => !watchlistNews[t]);
+
+    if (!needsQuote.length && !needsCandles.length && !needsNews.length) return;
+
+    set({ watchlistLoading: true });
+    const fp = force ? "&force=true" : "";
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+    // 1 — Quotes (for tile colours + prices)
+    for (let i = 0; i < needsQuote.length; i++) {
+      const ticker = needsQuote[i];
+      try {
+        let q: { c?: number; pc?: number; dp?: number };
+        if (useShared) {
+          const r = await fetch(`/api/finnhub?ticker=${ticker}&type=quote${fp}`);
+          if (!r.ok) continue;
+          q = await r.json() as typeof q;
+        } else {
+          const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${apiKey}`);
+          q = await r.json() as typeof q;
+        }
+        if (!q.c || q.c === 0) continue;
+        const entry: StockData = {
+          price: q.c, prevClose: q.pc ?? 0, today: q.dp ?? null,
+          ytd: null, "3m": null, "6m": null, "1y": null, "5y": null,
+        };
+        set(s => ({ stockData: { ...s.stockData, [ticker]: entry } }));
+      } catch { /* best-effort */ }
+      if (!useShared && i < needsQuote.length - 1) await sleep(220);
+    }
+
+    // 2 — 1Y daily closes for correlation (via Yahoo Finance proxy, no rate limit)
+    await Promise.all(needsCandles.map(async ticker => {
+      try {
+        const r = await fetch(`/api/historical?ticker=${ticker}`);
+        if (!r.ok) return;
+        const hist = await r.json() as { s?: string; t?: number[]; c?: number[] };
+        if (hist.s !== "no_data" && hist.t?.length && hist.c?.length) {
+          set(s => ({ candleData: { ...s.candleData, [ticker]: { timestamps: hist.t!, closes: hist.c! } } }));
+          saveCandleCache(ticker, hist.t!, hist.c!).catch(() => {});
+        }
+      } catch { /* best-effort */ }
+    }));
+
+    // 3 — News (server-proxied, no client API key needed)
+    const newsResults: Record<string, NewsItem[]> = {};
+    await Promise.all(needsNews.map(async ticker => {
+      try {
+        const r = await fetch(`/api/news?ticker=${ticker}`);
+        if (!r.ok) return;
+        const articles = await r.json() as NewsItem[];
+        newsResults[ticker] = articles;
+      } catch { /* best-effort */ }
+    }));
+    if (Object.keys(newsResults).length) {
+      set(s => ({ watchlistNews: { ...s.watchlistNews, ...newsResults } }));
+    }
+
+    set({ watchlistLoading: false });
   },
 
   // ── Fetch stock data ──────────────────────────────────────────────
