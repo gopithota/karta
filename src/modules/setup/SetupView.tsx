@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { usePortfolioStore } from "../../store/usePortfolioStore";
 import { THEMES, SWATCHES } from "../../theme";
 import SmartInput from "../../SmartInput";
+import type { Watchlist } from "../../types";
 
 export default function SetupView() {
   const S              = usePortfolioStore(s => s.S);
@@ -20,6 +22,41 @@ export default function SetupView() {
   const handleSmartApply = usePortfolioStore(s => s.handleSmartApply);
   const recordPortfolioEvent = usePortfolioStore(s => s.recordPortfolioEvent);
   const isMobile       = usePortfolioStore(s => s.isMobile);
+  const watchlists     = usePortfolioStore(s => s.watchlists);
+  const setWatchlists  = usePortfolioStore(s => s.setWatchlists);
+  const fetchWatchlistData = usePortfolioStore(s => s.fetchWatchlistData);
+
+  const [wlInputs, setWlInputs] = useState(["", ""]);
+
+  const addTickers = (wlIdx: number, raw: string) => {
+    const newTickers = raw.split(/[\s,]+/)
+      .map(t => t.trim().toUpperCase())
+      .filter(t => /^[A-Z]{1,5}$/.test(t));
+    if (!newTickers.length) return;
+    const updated = watchlists.map((wl, i) =>
+      i !== wlIdx ? wl : { ...wl, tickers: [...new Set([...wl.tickers, ...newTickers])] }
+    ) as Watchlist[];
+    setWatchlists(updated);
+    setWlInputs(prev => prev.map((v, i) => (i === wlIdx ? "" : v)));
+    fetchWatchlistData();
+  };
+
+  const removeTicker = (wlIdx: number, ticker: string) => {
+    const updated = watchlists.map((wl, i) =>
+      i !== wlIdx ? wl : { ...wl, tickers: wl.tickers.filter(t => t !== ticker) }
+    ) as Watchlist[];
+    setWatchlists(updated);
+  };
+
+  const updateWlName = (wlIdx: number, name: string) => {
+    const updated = watchlists.map((wl, i) => (i !== wlIdx ? wl : { ...wl, name })) as Watchlist[];
+    setWatchlists(updated);
+  };
+
+  const clearWatchlist = (wlIdx: number) => {
+    const updated = watchlists.map((wl, i) => (i !== wlIdx ? wl : { ...wl, tickers: [] })) as Watchlist[];
+    setWatchlists(updated);
+  };
 
   const saveApiKey = () => {
     setApiKey(apiInput);
@@ -134,6 +171,61 @@ export default function SetupView() {
               </div>
             </div>
           </div>
+          {/* Watchlists card */}
+          <div style={{ background: S.panel, borderRadius: 10, border: `1px solid ${S.border}`, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.12)" }}>
+            <div style={{ padding: "14px 20px", borderBottom: `1px solid ${S.border}` }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: S.text }}>Watchlists</div>
+              <div style={{ fontSize: 12, color: S.muted, marginTop: 2 }}>Track tickers you don't own — shown as an equal-size heatmap. Up to 2 watchlists.</div>
+            </div>
+
+            {watchlists.map((wl, wlIdx) => (
+              <div key={wl.id} style={{ padding: 20, borderBottom: wlIdx === 0 ? `1px solid ${S.border}` : undefined }}>
+                {/* Watchlist header: name + clear */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <input
+                    value={wl.name}
+                    onChange={e => updateWlName(wlIdx, e.target.value)}
+                    placeholder={`Watchlist ${wl.id}`}
+                    maxLength={30}
+                    style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: `1px solid ${S.border}`, background: S.inputBg, color: S.text, fontSize: 13, fontWeight: 700, outline: "none" }}
+                  />
+                  {wl.tickers.length > 0 && (
+                    <button onClick={() => clearWatchlist(wlIdx)} style={{ fontSize: 12, color: "#f87171", background: "none", border: "none", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>Clear all</button>
+                  )}
+                </div>
+
+                {/* Add ticker input */}
+                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                  <input
+                    value={wlInputs[wlIdx]}
+                    onChange={e => setWlInputs(prev => prev.map((v, i) => (i === wlIdx ? e.target.value : v)))}
+                    onKeyDown={e => { if (e.key === "Enter") addTickers(wlIdx, wlInputs[wlIdx]); }}
+                    placeholder="Add tickers, e.g. AAPL TSLA AMZN"
+                    style={{ flex: 1, padding: "7px 10px", borderRadius: 6, border: `1px solid ${S.border}`, background: S.inputBg, color: S.text, fontSize: 13, outline: "none" }}
+                  />
+                  <button
+                    onClick={() => addTickers(wlIdx, wlInputs[wlIdx])}
+                    disabled={!wlInputs[wlIdx].trim()}
+                    style={{ padding: "7px 16px", borderRadius: 6, border: "none", cursor: wlInputs[wlIdx].trim() ? "pointer" : "not-allowed", background: S.accent, color: "#fff", fontSize: 13, fontWeight: 600, opacity: !wlInputs[wlIdx].trim() ? 0.5 : 1 }}
+                  >Add</button>
+                </div>
+
+                {/* Ticker pills */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {wl.tickers.map(ticker => (
+                    <div key={ticker} style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 5, background: S.bg, border: `1px solid ${S.border}` }}>
+                      <span style={{ fontWeight: 700, fontSize: 12 }}>{ticker}</span>
+                      <button onClick={() => removeTicker(wlIdx, ticker)} style={{ background: "none", border: "none", cursor: "pointer", color: S.muted, fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>
+                    </div>
+                  ))}
+                  {!wl.tickers.length && (
+                    <span style={{ fontSize: 12, color: S.subtext }}>No tickers yet — type above and press Enter or Add</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
         </div>
 
         {/* ── Appearance card (right column) ── */}

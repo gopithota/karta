@@ -2,22 +2,26 @@ import { useRef, useEffect, useMemo } from "react";
 import { usePortfolioStore, DEFAULT_PORTFOLIO } from "../../store/usePortfolioStore";
 import { computeTreemap, perfColor, tileFgColor } from "../../utils";
 import { LEGEND_STOPS } from "../../constants";
+import WatchlistView from "../watchlist/WatchlistView";
 
 export default function HeatmapView() {
-  const S          = usePortfolioStore(s => s.S);
-  const portfolio  = usePortfolioStore(s => s.portfolio);
-  const stockData  = usePortfolioStore(s => s.stockData);
-  const loading    = usePortfolioStore(s => s.loading);
-  const isDemo     = usePortfolioStore(s => s.isDemo);
-  const tooltip    = usePortfolioStore(s => s.tooltip);
-  const setTooltip = usePortfolioStore(s => s.setTooltip);
-  const setTab     = usePortfolioStore(s => s.setTab);
-  const setPrivacyMode = usePortfolioStore(s => s.setPrivacyMode);
-  const boxSize    = usePortfolioStore(s => s.boxSize);
-  const setBoxSize = usePortfolioStore(s => s.setBoxSize);
-  const isMobile   = usePortfolioStore(s => s.isMobile);
-  const fetchData  = usePortfolioStore(s => s.fetchData);
-  const privacyMode = usePortfolioStore(s => s.privacyMode);
+  const S               = usePortfolioStore(s => s.S);
+  const portfolio       = usePortfolioStore(s => s.portfolio);
+  const stockData       = usePortfolioStore(s => s.stockData);
+  const loading         = usePortfolioStore(s => s.loading);
+  const isDemo          = usePortfolioStore(s => s.isDemo);
+  const tooltip         = usePortfolioStore(s => s.tooltip);
+  const setTooltip      = usePortfolioStore(s => s.setTooltip);
+  const setTab          = usePortfolioStore(s => s.setTab);
+  const setPrivacyMode  = usePortfolioStore(s => s.setPrivacyMode);
+  const boxSize         = usePortfolioStore(s => s.boxSize);
+  const setBoxSize      = usePortfolioStore(s => s.setBoxSize);
+  const isMobile        = usePortfolioStore(s => s.isMobile);
+  const fetchData       = usePortfolioStore(s => s.fetchData);
+  const watchlists      = usePortfolioStore(s => s.watchlists);
+  const heatmapView     = usePortfolioStore(s => s.heatmapView);
+  const setHeatmapView  = usePortfolioStore(s => s.setHeatmapView);
+  const fetchWatchlistData = usePortfolioStore(s => s.fetchWatchlistData);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -28,7 +32,21 @@ export default function HeatmapView() {
     );
     obs.observe(containerRef.current);
     return () => obs.disconnect();
-  }, [setBoxSize]);
+  }, [setBoxSize, heatmapView]);
+
+  // Trigger data fetch and clear tooltip when switching to a watchlist
+  useEffect(() => {
+    if (heatmapView !== "portfolio") fetchWatchlistData();
+    setTooltip(null);
+  }, [heatmapView, fetchWatchlistData, setTooltip]);
+
+  // Reset to portfolio if the active watchlist becomes empty
+  useEffect(() => {
+    if (heatmapView === "watchlist1" && watchlists[0].tickers.length === 0) setHeatmapView("portfolio");
+    if (heatmapView === "watchlist2" && watchlists[1].tickers.length === 0) setHeatmapView("portfolio");
+  }, [watchlists, heatmapView, setHeatmapView]);
+
+  // ── Portfolio treemap data (computed unconditionally — hooks rule) ─
 
   const getWeight = (ticker: string) => {
     const d = stockData[ticker];
@@ -37,11 +55,7 @@ export default function HeatmapView() {
     return h ? h.shares * 100 : 100;
   };
 
-  const totalValue = useMemo(
-    () => portfolio.reduce((s, { ticker }) => s + getWeight(ticker), 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [portfolio, stockData]
-  );
+  const totalValue = portfolio.reduce((s, { ticker }) => s + getWeight(ticker), 0);
 
   const treemapItems = useMemo(() => portfolio.map(({ ticker }) => {
     const realPerf  = stockData[ticker]?.today ?? null;
@@ -55,6 +69,11 @@ export default function HeatmapView() {
     () => computeTreemap(treemapItems, boxSize.w, boxSize.h),
     [treemapItems, boxSize.w, boxSize.h]
   );
+
+  // ── Delegate to WatchlistView when a watchlist is active ──────────
+  if (heatmapView !== "portfolio") {
+    return <WatchlistView />;
+  }
 
   return (
     <div style={{ position: "absolute", inset: 0, padding: isMobile ? 8 : 16 }}>
@@ -94,11 +113,12 @@ export default function HeatmapView() {
         {isDemo && !loading && (
           <div style={{ position: "absolute", top: 52, left: 12, zIndex: 25, display: "flex", flexDirection: "column", gap: 7, alignItems: "flex-start" }}>
             {[
-              { icon: "👁", label: "Toggle portfolio value", action: () => setPrivacyMode(p => !p) },
-              { icon: "⊞", label: "See table view",          action: () => setTab("table")  },
-              { icon: "✏️", label: "Customize your portfolio", action: () => setTab("setup") },
+              { icon: "👁",  label: "Toggle portfolio value",   action: () => setPrivacyMode(p => !p) },
+              { icon: "⊞",  label: "See table view",            action: () => setTab("table") },
+              { icon: "✏️", label: "Customize your portfolio",  action: () => setTab("setup") },
             ].map(hint => (
-              <button key={hint.label} onClick={hint.action} style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 8, background: S.overlay, backdropFilter: "blur(8px)", border: `1px solid ${S.border}`, color: S.muted, fontSize: 12, fontWeight: 500, cursor: "pointer", transition: "color 0.15s, border-color 0.15s" }}
+              <button key={hint.label} onClick={hint.action}
+                style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 8, background: S.overlay, backdropFilter: "blur(8px)", border: `1px solid ${S.border}`, color: S.muted, fontSize: 12, fontWeight: 500, cursor: "pointer", transition: "color 0.15s, border-color 0.15s" }}
                 onMouseEnter={e => { e.currentTarget.style.color = S.text; e.currentTarget.style.borderColor = S.green + "44"; }}
                 onMouseLeave={e => { e.currentTarget.style.color = S.muted; e.currentTarget.style.borderColor = S.border; }}
               >
@@ -110,8 +130,10 @@ export default function HeatmapView() {
           </div>
         )}
 
-        {/* Tiles */}
-        <div ref={containerRef} style={{ position: "absolute", inset: 0 }} onClick={isMobile ? () => setTooltip(null) : undefined}>
+        {/* Tiles + tooltip + legend */}
+        <div ref={containerRef} style={{ position: "absolute", inset: 0 }}
+          onClick={isMobile ? () => setTooltip(null) : undefined}
+        >
           {rects.map(rect => {
             const gap = 3;
             const bx = rect.x + gap, by = rect.y + gap;
@@ -122,8 +144,7 @@ export default function HeatmapView() {
             const showPrice  = bw > 76 && bh > 60;
             const fg = tileFgColor(rect.perf);
             return (
-              <div
-                key={rect.id}
+              <div key={rect.id}
                 style={{ position: "absolute", left: bx, top: by, width: bw, height: bh, background: perfColor(rect.perf), borderRadius: 7, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflow: "hidden", transition: "filter .15s", cursor: isMobile ? "pointer" : "default", boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)" }}
                 onMouseEnter={isMobile ? undefined : e => { e.currentTarget.style.filter = "brightness(0.93)"; setTooltip(rect); }}
                 onMouseLeave={isMobile ? undefined : e => { e.currentTarget.style.filter = ""; setTooltip(null); }}
