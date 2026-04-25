@@ -1,0 +1,590 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { THEMES, SWATCHES, useTheme } from "./theme.js";
+
+// ── Shared primitives ─────────────────────────────────────────────
+
+function KartaLogo({ size = 36 }) {
+  const cells = [
+    ["#2a6040","#3a7a52","#4a9966"],
+    ["#3a7a52","#4a9966","#5ab878"],
+    ["#4a9966","#5ab878","#4ade80"],
+    ["#235238","#4a9966","#22c55e"],
+  ];
+  const cell = size / 4.2, gap = cell * 0.18, r = cell * 0.28;
+  const totalW = 3*cell+2*gap, totalH = 4*cell+3*gap;
+  const ox = (size-totalW)/2, oy = (size-totalH)/2;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      {cells.map((row, ri) => row.map((fill, ci) => (
+        <rect key={`${ri}-${ci}`}
+          x={ox+ci*(cell+gap)} y={oy+ri*(cell+gap)}
+          width={cell} height={cell} rx={r} fill={fill}
+        />
+      )))}
+    </svg>
+  );
+}
+
+const DEMO_TILES = [
+  { t:"NVDA",p:4.82,w:18},{t:"AAPL",p:-0.43,w:14},{t:"MSFT",p:1.21,w:13},
+  {t:"GOOGL",p:2.67,w:10},{t:"META",p:3.11,w:9},{t:"AMZN",p:-1.88,w:10},
+  {t:"TSLA",p:-5.30,w:8},{t:"JPM",p:0.94,w:7},{t:"V",p:0.42,w:6},{t:"BRK.B",p:0.18,w:5},
+];
+function perfColor(p) {
+  if(p===null||p===undefined||isNaN(p))return "#D1D5DB";
+  if(Math.abs(p)<0.2)return "#E8EAED";
+  const t=Math.max(-1,Math.min(1,p/8));
+  if(t<0){const i=-t;return `rgb(${Math.round(252-87*i)},${Math.round(232-218*i)},${Math.round(230-216*i)})`;}
+  return `rgb(${Math.round(230-211*t)},${Math.round(244-129*t)},${Math.round(234-183*t)})`;
+}
+function demoFg(p) {
+  const s=p!=null&&Math.abs(p)>4;
+  return {main:s?"rgba(255,255,255,0.95)":(p>=0?"#14532d":"#7f1d1d"),sub:s?"rgba(255,255,255,0.80)":(p>=0?"#166534":"#991b1b")};
+}
+function computeDemoTreemap(items,W,H) {
+  if(!items.length||!W||!H)return [];
+  const total=items.reduce((s,t)=>s+t.w,0);
+  const nodes=items.map(t=>({...t,area:(t.w/total)*W*H}));
+  function split(ns,x,y,w,h) {
+    if(!ns.length)return [];
+    if(ns.length===1)return [{...ns[0],rx:x,ry:y,rw:w,rh:h}];
+    const sum=ns.reduce((s,n)=>s+n.area,0);
+    let acc=0,si=1;
+    for(let i=0;i<ns.length-1;i++){acc+=ns[i].area;si=i+1;if(acc>=sum/2)break;}
+    const left=ns.slice(0,si),right=ns.slice(si);
+    const r=left.reduce((s,n)=>s+n.area,0)/sum;
+    return w>=h?[...split(left,x,y,w*r,h),...split(right,x+w*r,y,w*(1-r),h)]:[...split(left,x,y,w,h*r),...split(right,x,y+h*r,w,h*(1-r))];
+  }
+  return split(nodes,0,0,W,H);
+}
+function DemoHeatmap() {
+  const [tiles,setTiles]=useState(DEMO_TILES);
+  const containerRef=useRef(null);
+  const [size,setSize]=useState({w:500,h:210});
+  useEffect(()=>{
+    if(!containerRef.current)return;
+    const obs=new ResizeObserver(([e])=>setSize({w:e.contentRect.width,h:e.contentRect.height}));
+    obs.observe(containerRef.current);
+    return()=>obs.disconnect();
+  },[]);
+  useEffect(()=>{
+    const id=setInterval(()=>setTiles(p=>p.map(t=>({...t,p:Math.max(-9,Math.min(9,t.p+(Math.random()-0.49)*0.5))}))),1400);
+    return()=>clearInterval(id);
+  },[]);
+  const GAP=3;
+  const rects=computeDemoTreemap(tiles,size.w,size.h);
+  return (
+    <div ref={containerRef} style={{position:"relative",width:"100%",height:"100%"}}>
+      {rects.map(rect=>{
+        const x=rect.rx+GAP,y=rect.ry+GAP,w=rect.rw-GAP*2,h=rect.rh-GAP*2;
+        if(w<4||h<4)return null;
+        const fg=demoFg(rect.p);
+        return (
+          <div key={rect.t} style={{position:"absolute",left:x,top:y,width:w,height:h,background:perfColor(rect.p),borderRadius:6,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"hidden",transition:"background 1s ease",boxShadow:"inset 0 0 0 1px rgba(0,0,0,0.06)"}}>
+            {w>28&&h>18&&<div style={{fontSize:Math.max(9,Math.min(15,w/5.5)),fontWeight:800,color:fg.main,lineHeight:1.1,letterSpacing:"-0.02em",fontFamily:"'JetBrains Mono',monospace"}}>{rect.t}</div>}
+            {w>52&&h>36&&<div style={{fontSize:Math.max(8,Math.min(12,w/7)),fontWeight:600,color:fg.sub,lineHeight:1.3,fontFamily:"'JetBrains Mono',monospace"}}>{rect.p>=0?"+":""}{rect.p.toFixed(2)}%</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const TICKER_ITEMS=[
+  {sym:"AAPL",chg:+1.24},{sym:"NVDA",chg:+8.40},{sym:"TSLA",chg:-5.20},{sym:"MSFT",chg:+0.87},
+  {sym:"META",chg:+3.11},{sym:"AMZN",chg:-1.88},{sym:"GOOGL",chg:+2.67},{sym:"JPM",chg:+0.94},
+  {sym:"BRK.B",chg:+0.18},{sym:"V",chg:+0.42},{sym:"NFLX",chg:-2.14},{sym:"AMD",chg:+5.33},
+  {sym:"DIS",chg:-0.76},{sym:"COIN",chg:+4.12},{sym:"GS",chg:+1.03},{sym:"SPY",chg:+0.61},
+];
+function TickerTape({S, tickerUp, tickerDown}) {
+  const items=[...TICKER_ITEMS,...TICKER_ITEMS];
+  return (
+    <div className="v2-ticker-wrap">
+      <div className="v2-ticker-track">
+        {items.map((item,i)=>(
+          <span key={i} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"0 16px",fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>
+            <span style={{color:S.code,fontWeight:700}}>{item.sym}</span>
+            <span style={{color:item.chg>=0?tickerUp:tickerDown,fontWeight:600}}>{item.chg>=0?"+":""}{item.chg.toFixed(2)}%</span>
+            <span style={{color:S.subtext}}>·</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function useScrollReveal(count) {
+  const refs=useRef([]);
+  const [revealed,setRevealed]=useState(()=>Array(count).fill(false));
+  useEffect(()=>{
+    const obs=new IntersectionObserver((entries)=>{
+      entries.forEach(e=>{
+        if(e.isIntersecting){const i=refs.current.indexOf(e.target);if(i!==-1){setRevealed(p=>{const n=[...p];n[i]=true;return n;});obs.unobserve(e.target);}}
+      });
+    },{threshold:0.08});
+    refs.current.forEach(el=>{if(el)obs.observe(el);});
+    return()=>obs.disconnect();
+  },[]);
+  return [refs,revealed];
+}
+
+function UserCounter({S, gradient}) {
+  const [count,setCount]=useState(null);
+  const [animated,setAnimated]=useState(0);
+  const posted=useRef(false);
+  const gradientRef=useRef(null);
+  useEffect(()=>{
+    if(posted.current)return;posted.current=true;
+    fetch("/api/counter",{method:"POST"}).then(r=>r.json()).then(d=>setCount(d.count)).catch(()=>setCount(312));
+  },[]);
+  useEffect(()=>{
+    if(count===null)return;
+    const start=Math.max(0,count-40);let cur=start;
+    const step=Math.max(1,Math.ceil((count-start)/28));
+    const id=setInterval(()=>{cur=Math.min(count,cur+step);setAnimated(cur);if(cur>=count)clearInterval(id);},38);
+    return()=>clearInterval(id);
+  },[count]);
+  // Force WebKit repaint when gradient changes — prevents background-clip:text from
+  // showing a solid rectangle after a theme switch
+  useEffect(()=>{
+    const el=gradientRef.current;
+    if(!el)return;
+    el.style.display="none";
+    void el.offsetHeight; // trigger reflow
+    el.style.display="";
+  },[gradient]);
+  return (
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+      <div ref={gradientRef} style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:"clamp(40px,6vw,62px)",fontWeight:400,letterSpacing:"-0.03em",lineHeight:1,background:gradient,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",minWidth:100,textAlign:"center"}}>
+        {count===null?"—":animated.toLocaleString()}
+      </div>
+      <div style={{fontSize:11,color:S.muted,fontFamily:"'JetBrains Mono',monospace",letterSpacing:"0.06em"}}>INVESTORS USING KARTA</div>
+    </div>
+  );
+}
+
+// ── Cycling headline word ─────────────────────────────────────────
+const CYCLE_WORDS = ["Analyze", "Strategize", "Track", "Understand"];
+
+function CyclingWord({gradient}) {
+  const [idx, setIdx] = useState(0);
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => { setIdx(i => (i+1) % CYCLE_WORDS.length); setVisible(true); }, 320);
+    }, 2600);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span style={{
+      display: "inline-block",
+      position: "relative", zIndex: 1,
+      opacity: visible ? 1 : 0,
+      transform: visible ? "translateY(0)" : "translateY(-10px)",
+      transition: "opacity 0.32s ease, transform 0.32s ease",
+      background: gradient,
+      WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+      minWidth: 220, textAlign: "left",
+    }}>
+      {CYCLE_WORDS[idx]}
+    </span>
+  );
+}
+
+// ── Tool card ─────────────────────────────────────────────────────
+function ToolCard({icon, name, desc, badge, S, accentGreen, greenBadgeBg, greenBadgeBorder}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: S.featureCard,
+        border: `1px solid ${hovered ? greenBadgeBorder : S.border}`,
+        borderRadius: 14, padding: "22px 20px",
+        display: "flex", flexDirection: "column", gap: 10,
+        transform: hovered ? "translateY(-3px)" : "none",
+        boxShadow: hovered ? "0 12px 32px rgba(0,0,0,0.1)" : "none",
+        transition: "all 0.2s ease",
+        position: "relative",
+      }}
+    >
+      {badge && (
+        <div style={{ position: "absolute", top: 14, right: 14, fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: greenBadgeBg, color: accentGreen, fontFamily: "'JetBrains Mono',monospace", letterSpacing: "0.05em" }}>
+          {badge}
+        </div>
+      )}
+      <div style={{ fontSize: 26 }}>{icon}</div>
+      <div style={{ fontFamily: "'DM Serif Display',Georgia,serif", fontSize: 16, color: S.text, lineHeight: 1.3 }}>{name}</div>
+      <div style={{ fontSize: 13, color: S.muted, lineHeight: 1.65 }}>{desc}</div>
+    </div>
+  );
+}
+
+// ── Main ──────────────────────────────────────────────────────────
+export default function LandingV2() {
+  const [theme, setTheme] = useTheme();
+  const S = THEMES[theme];
+
+  useEffect(() => { document.body.style.background = S.bg; }, [S.bg]);
+
+  const [scrolled, setScrolled] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
+  const [revealRefs, revealed] = useScrollReveal(6);
+
+  const coffeeText   = theme==="light" ? "#b7840a" : "#fde68a";
+  const coffeeBorder = theme==="light" ? "rgba(180,130,0,0.30)" : "rgba(255,214,0,0.18)";
+  const coffeeHoverBg = theme==="light" ? "rgba(180,130,0,0.08)" : "rgba(255,214,0,0.08)";
+  const coffeeHoverBorder = theme==="light" ? "rgba(180,130,0,0.45)" : "rgba(255,214,0,0.35)";
+
+  // ── Theme-aware accent colours (light gets darker, higher-contrast greens) ──
+  const isLight = theme === "light";
+  const accentGreen  = S.green;                                              // #16a34a light / #4ade80 dark
+  const accentGrad   = isLight ? "linear-gradient(135deg,#16a34a,#0891b2)"  // deep green→ocean
+                                : "linear-gradient(135deg,#4ade80,#22d3ee)"; // neon green→cyan
+  const greenBadgeBg     = isLight ? "rgba(22,163,74,0.09)"  : "rgba(74,222,128,0.06)";
+  const greenBadgeBorder = isLight ? "rgba(22,163,74,0.30)"  : "rgba(74,222,128,0.20)";
+  const stepCircleBg     = isLight ? "rgba(22,163,74,0.10)"  : "rgba(74,222,128,0.10)";
+  const stepCircleBorder = isLight ? "rgba(22,163,74,0.32)"  : "rgba(74,222,128,0.22)";
+  const tickerUp         = isLight ? "#15803d"  : "#4ade80";
+  const tickerDown       = isLight ? "#dc2626"  : "#f87171";
+  const airGapBg         = isLight ? "rgba(22,163,74,0.05)"  : "rgba(74,222,128,0.03)";
+  const airGapBorder     = isLight ? "rgba(22,163,74,0.22)"  : "rgba(74,222,128,0.15)";
+  const browserBoxBg     = isLight ? "rgba(22,163,74,0.10)"  : "rgba(74,222,128,0.15)";
+  const browserBoxBorder = isLight ? "rgba(22,163,74,0.38)"  : "rgba(74,222,128,0.30)";
+  const ctaShadow        = isLight ? "0 0 48px rgba(22,163,74,0.18)" : "0 0 48px rgba(74,222,128,0.20)";
+  const ctaShadowHover   = isLight ? "0 12px 56px rgba(22,163,74,0.28)" : "0 12px 56px rgba(74,222,128,0.30)";
+  const ctaBtnGrad       = isLight ? "linear-gradient(135deg,#16a34a,#15803d)" : "linear-gradient(135deg,#4ade80,#16a34a)";
+  const ctaBtnColor      = isLight ? "#ffffff" : "#051a0a";
+  const diagramRedColor  = isLight ? "#b91c1c" : "#f87171";
+
+  const floatingTiles = useMemo(() => isLight ? [
+    {left:"8%",size:28,dur:14,delay:0,color:"rgba(22,163,74,0.18)"},{left:"21%",size:18,dur:18,delay:3.5,color:"rgba(8,145,178,0.14)"},
+    {left:"37%",size:34,dur:12,delay:1.2,color:"rgba(22,163,74,0.12)"},{left:"52%",size:22,dur:16,delay:5.0,color:"rgba(22,163,74,0.20)"},
+    {left:"66%",size:14,dur:20,delay:2.8,color:"rgba(220,38,38,0.12)"},{left:"78%",size:30,dur:13,delay:0.7,color:"rgba(8,145,178,0.16)"},
+    {left:"88%",size:20,dur:17,delay:4.2,color:"rgba(22,163,74,0.15)"},{left:"14%",size:16,dur:22,delay:6.5,color:"rgba(22,163,74,0.10)"},
+    {left:"59%",size:26,dur:15,delay:3.1,color:"rgba(220,38,38,0.10)"},
+  ] : [
+    {left:"8%",size:28,dur:14,delay:0,color:"rgba(74,222,128,0.12)"},{left:"21%",size:18,dur:18,delay:3.5,color:"rgba(34,211,238,0.08)"},
+    {left:"37%",size:34,dur:12,delay:1.2,color:"rgba(74,222,128,0.08)"},{left:"52%",size:22,dur:16,delay:5.0,color:"rgba(74,222,128,0.14)"},
+    {left:"66%",size:14,dur:20,delay:2.8,color:"rgba(248,113,113,0.09)"},{left:"78%",size:30,dur:13,delay:0.7,color:"rgba(34,211,238,0.10)"},
+    {left:"88%",size:20,dur:17,delay:4.2,color:"rgba(74,222,128,0.11)"},{left:"14%",size:16,dur:22,delay:6.5,color:"rgba(74,222,128,0.07)"},
+    {left:"59%",size:26,dur:15,delay:3.1,color:"rgba(248,113,113,0.08)"},
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [theme]);
+
+  useEffect(() => { const fn=()=>setScrolled(window.scrollY>24); window.addEventListener("scroll",fn); return ()=>window.removeEventListener("scroll",fn); }, []);
+  useEffect(() => { const fn=()=>setIsMobile(window.innerWidth<640); window.addEventListener("resize",fn); return ()=>window.removeEventListener("resize",fn); }, []);
+
+  const ThemePicker = (
+    <div style={{display:"flex",gap:5,alignItems:"center",padding:"4px 8px",borderRadius:20,border:`1px solid ${S.border}`}}>
+      {SWATCHES.map(t=>(
+        <button key={t.key} onClick={()=>setTheme(t.key)} title={t.label} style={{width:14,height:14,borderRadius:"50%",background:t.dot,border:theme===t.key?`2px solid ${accentGreen}`:"2px solid transparent",cursor:"pointer",padding:0,outline:"none",boxShadow:theme===t.key?`0 0 0 1px ${greenBadgeBorder}`:"none",transition:"box-shadow 0.15s"}} />
+      ))}
+    </div>
+  );
+
+  return (
+    <div style={{background:S.bg,color:S.text,minHeight:"100vh",fontFamily:"'Inter',system-ui,sans-serif"}}>
+
+      {S.grain && <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,opacity:0.4,backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E")`,backgroundSize:"128px"}} />}
+      <div style={{position:"fixed",top:"-25%",left:"50%",transform:"translateX(-50%)",width:"80vw",height:"65vh",background:`radial-gradient(ellipse, ${S.pageGlow} 0%, transparent 70%)`,pointerEvents:"none",zIndex:0}} />
+
+      {/* ── Nav ── */}
+      <nav style={{position:"fixed",top:0,left:0,right:0,zIndex:100,padding:isMobile?"0 16px":"0 32px",display:"flex",alignItems:"center",justifyContent:"space-between",height:56,background:scrolled?S.navBg:"transparent",backdropFilter:scrolled?"blur(16px)":"none",borderBottom:scrolled?`1px solid ${S.border}`:"none",transition:"all 0.3s"}}>
+        <div style={{display:"flex",alignItems:"center",gap:9}}>
+          <KartaLogo size={28} />
+          <span style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:20,letterSpacing:"-0.01em",color:S.text}}>Karta</span>
+          {!isMobile && <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,background:greenBadgeBg,border:`1px solid ${greenBadgeBorder}`,color:accentGreen,letterSpacing:"0.05em",fontFamily:"'JetBrains Mono',monospace"}}>PLATFORM</span>}
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {ThemePicker}
+          <a href="/app" style={{padding:"6px 18px",borderRadius:8,background:ctaBtnGrad,color:ctaBtnColor,fontSize:13,fontWeight:800,textDecoration:"none",transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity="0.82"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>Launch →</a>
+        </div>
+      </nav>
+
+      {/* ── Hero ── */}
+      <section style={{position:"relative",zIndex:1,overflow:"hidden",minHeight:isMobile?"auto":"100vh",display:"flex",alignItems:"center"}}>
+        {/* Floating tiles background */}
+        <div aria-hidden="true" style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none",zIndex:0}}>
+          {floatingTiles.slice(0,isMobile?5:9).map((t,i)=>(
+            <div key={i} className="v2-float-tile" style={{position:"absolute",bottom:"-60px",left:t.left,width:t.size,height:t.size,borderRadius:4,background:t.color,animationDuration:`${t.dur}s`,animationDelay:`${t.delay}s`}} />
+          ))}
+        </div>
+
+        <div style={{
+          position:"relative",zIndex:1,
+          width:"100%",maxWidth:1320,margin:"0 auto",
+          padding:isMobile?"88px 16px 48px":"100px 48px 72px",
+          display:"grid",
+          gridTemplateColumns:isMobile?"1fr":"1fr 1fr",
+          gap:isMobile?40:"6vw",
+          alignItems:"center",
+        }}>
+
+          {/* ── Left: text ── */}
+          <div style={{display:"flex",flexDirection:"column",gap:0}}>
+
+            {/* Platform badge */}
+            <div style={{marginBottom:24}}>
+              <div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"5px 16px",borderRadius:99,background:greenBadgeBg,border:`1px solid ${greenBadgeBorder}`,fontSize:12,color:accentGreen,fontFamily:"'JetBrains Mono',monospace",letterSpacing:"0.05em",fontWeight:600}}>
+                ◆ FINANCE PLATFORM · AIR-GAPPED · PRIVACY FIRST
+              </div>
+            </div>
+
+            {/* Logo */}
+            <div style={{display:"flex",marginBottom:20}}>
+              <div style={{position:"relative"}}>
+                <KartaLogo size={56} />
+                <div style={{position:"absolute",inset:-10,borderRadius:22,background:`radial-gradient(ellipse, ${S.logoGlow} 0%, transparent 70%)`,pointerEvents:"none"}} />
+              </div>
+            </div>
+
+            {/* Headline with cycling word */}
+            <div style={{margin:"0 0 16px"}}>
+              {/* Cycling word in its own block so translateY animation doesn't get clipped by siblings */}
+              <div style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:"clamp(40px,5.5vw,72px)",fontWeight:400,lineHeight:1.15,letterSpacing:"-0.03em",overflow:"visible",position:"relative",zIndex:1,paddingBottom:4}}>
+                <CyclingWord key={accentGrad} gradient={accentGrad} />
+              </div>
+              <h1 style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:"clamp(40px,5.5vw,72px)",fontWeight:400,lineHeight:1.0,letterSpacing:"-0.03em",margin:0,color:S.text}}>
+                your investments.<br />
+                <em style={{color:S.muted,fontSize:"0.82em"}}>Privately.</em>
+              </h1>
+            </div>
+
+            <p style={{fontSize:16,color:S.muted,lineHeight:1.75,maxWidth:460,margin:"0 0 32px"}}>
+              The investment toolkit that lives entirely in your browser.
+              Heatmaps, watchlists, correlations — and more.{" "}
+              <strong style={{color:S.strong}}>Your holdings never touch our servers.</strong>
+            </p>
+
+            {/* CTAs */}
+            <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:28}}>
+              <a href="/app" style={{padding:"14px 34px",borderRadius:10,background:ctaBtnGrad,color:ctaBtnColor,fontSize:15,fontWeight:800,textDecoration:"none",boxShadow:ctaShadow,transition:"transform 0.2s, box-shadow 0.2s",letterSpacing:"-0.01em"}}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=ctaShadowHover;}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=ctaShadow;}}>
+                Open Platform →
+              </a>
+            </div>
+
+            {/* Tool pills */}
+            <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+              {["📊 Heatmap","👁 Watchlists","🔗 Correlations","📈 History","⚡ More coming"].map((tool,i) => (
+                <div key={i} style={{padding:"4px 12px",borderRadius:99,border:`1px solid ${S.border}`,background:S.panel,fontSize:11,color:S.muted,fontWeight:500,letterSpacing:"0.01em"}}>
+                  {tool}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Right: demo window ── */}
+          {!isMobile && (
+            <div style={{
+              transform:"perspective(1100px) rotateY(-4deg) rotateX(2deg)",
+              transformOrigin:"center center",
+              transition:"transform 0.4s ease",
+            }}
+            onMouseEnter={e=>e.currentTarget.style.transform="perspective(1100px) rotateY(-1deg) rotateX(0.5deg)"}
+            onMouseLeave={e=>e.currentTarget.style.transform="perspective(1100px) rotateY(-4deg) rotateX(2deg)"}
+            >
+              <div style={{background:S.demoWin,border:`1px solid ${S.border}`,borderRadius:16,overflow:"hidden",boxShadow:theme==="light"?"0 32px 80px rgba(0,0,0,0.14),0 0 0 1px rgba(0,0,0,0.04)":"0 48px 120px rgba(0,0,0,0.7),0 0 60px rgba(74,222,128,0.06)"}}>
+                <div style={{padding:"11px 16px",borderBottom:`1px solid ${S.border}`,display:"flex",alignItems:"center",gap:10,background:S.demoBar}}>
+                  <div style={{display:"flex",gap:6}}>{["#f87171","#fbbf24","#4ade80"].map(c=><div key={c} style={{width:10,height:10,borderRadius:"50%",background:c,opacity:0.6}} />)}</div>
+                  <div style={{flex:1,background:S.demoUrl,borderRadius:5,height:20,display:"flex",alignItems:"center",paddingLeft:10,gap:6}}>
+                    <KartaLogo size={12} />
+                    <span style={{fontSize:10,color:S.muted,fontFamily:"'JetBrains Mono',monospace"}}>karta.app</span>
+                  </div>
+                </div>
+                <div style={{padding:"9px 16px",borderBottom:`1px solid ${S.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <KartaLogo size={18} />
+                    <span style={{fontWeight:800,fontSize:13,fontFamily:"'DM Serif Display',Georgia,serif",color:S.text}}>My Portfolio</span>
+                    <span style={{fontSize:12,color:tickerUp,fontWeight:700}}>▲ 1.24%</span>
+                  </div>
+                  <div style={{display:"flex",gap:5}}>
+                    {["Heatmap","Watchlist","Corr","Setup"].map((t,i)=>(
+                      <div key={t} style={{padding:"3px 9px",borderRadius:5,fontSize:10,color:i===0?S.tabActiveText:S.muted,background:i===0?S.tabActiveBg:"transparent",border:`1px solid ${i===0?S.tabActiveBorder:S.border}`}}>{t}</div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{height:320}}><DemoHeatmap /></div>
+              </div>
+              <p style={{fontSize:10,color:S.subtext,marginTop:8,textAlign:"center",fontFamily:"'JetBrains Mono',monospace",letterSpacing:"0.04em"}}>↑ live demo · prices drift in real time</p>
+            </div>
+          )}
+
+          {/* Mobile: demo below text */}
+          {isMobile && (
+            <div>
+              <div style={{background:S.demoWin,border:`1px solid ${S.border}`,borderRadius:14,overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.5)"}}>
+                <div style={{padding:"10px 14px",borderBottom:`1px solid ${S.border}`,display:"flex",alignItems:"center",gap:10,background:S.demoBar}}>
+                  <div style={{display:"flex",gap:5}}>{["#f87171","#fbbf24","#4ade80"].map(c=><div key={c} style={{width:9,height:9,borderRadius:"50%",background:c,opacity:0.6}} />)}</div>
+                  <div style={{flex:1,background:S.demoUrl,borderRadius:4,height:18,display:"flex",alignItems:"center",paddingLeft:8,gap:5}}>
+                    <KartaLogo size={11} />
+                    <span style={{fontSize:9,color:S.muted,fontFamily:"'JetBrains Mono',monospace"}}>karta.app</span>
+                  </div>
+                </div>
+                <div style={{height:180}}><DemoHeatmap /></div>
+              </div>
+              <p style={{fontSize:10,color:S.subtext,marginTop:6,textAlign:"center",fontFamily:"'JetBrains Mono',monospace"}}>↑ live demo · prices drift in real time</p>
+            </div>
+          )}
+        </div>
+
+        {/* Ticker tape pinned to bottom of hero */}
+        <div style={{position:"absolute",bottom:0,left:0,right:0,zIndex:2}}>
+          <TickerTape S={S} tickerUp={tickerUp} tickerDown={tickerDown} />
+        </div>
+      </section>
+
+      {/* ── Stats ── */}
+      <section ref={el=>revealRefs.current[0]=el} style={{position:"relative",zIndex:1,maxWidth:820,margin:"0 auto",padding:isMobile?"0 16px 48px":"0 24px 64px",opacity:revealed[0]?1:0,transform:revealed[0]?"none":"translateY(24px)",transition:"opacity 0.6s ease, transform 0.6s ease"}}>
+        <div style={{background:S.statsBg,border:`1px solid ${S.border}`,borderRadius:16,padding:isMobile?"28px 20px":"40px 48px",display:"flex",justifyContent:"space-around",flexWrap:"wrap",gap:32}}>
+          <UserCounter S={S} gradient={accentGrad} />
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+            <div style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:"clamp(36px,5vw,56px)",fontWeight:400,letterSpacing:"-0.03em",color:S.text,lineHeight:1}}>0 kb</div>
+            <div style={{fontSize:11,color:S.muted,fontFamily:"'JetBrains Mono',monospace",letterSpacing:"0.06em"}}>DATA SENT TO SERVERS</div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Platform Tools ── */}
+      <section ref={el=>revealRefs.current[1]=el} style={{position:"relative",zIndex:1,maxWidth:1000,margin:"0 auto",padding:isMobile?"0 16px 48px":"0 24px 72px",opacity:revealed[1]?1:0,transform:revealed[1]?"none":"translateY(24px)",transition:"opacity 0.6s ease, transform 0.6s ease"}}>
+        <div style={{textAlign:"center",marginBottom:52}}>
+          <h2 style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:"clamp(28px,4vw,46px)",fontWeight:400,letterSpacing:"-0.02em",margin:"0 0 14px"}}>
+            One platform.<br /><em>Every perspective.</em>
+          </h2>
+          <p style={{color:S.muted,fontSize:15,maxWidth:480,margin:"0 auto",lineHeight:1.7}}>
+            Each tool answers a different question about your investments — all running locally in your browser.
+          </p>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:14}}>
+          {[
+            {icon:"🟩",name:"Portfolio Heatmap",desc:"Color-coded tiles sized by position value. See at a glance which holdings are driving your day — deep green to deep red.",badge:null},
+            {icon:"👁",name:"Watchlists",desc:"Track up to 2 custom watchlists of tickers you don't own. Full heatmap, correlations, and news for each.",badge:"NEW"},
+            {icon:"🔗",name:"Correlation Matrix",desc:"Discover which holdings move together. Cluster detection shows you where your real diversification — or concentration — lies.",badge:null},
+            {icon:"📈",name:"Portfolio History",desc:"Track how your total portfolio value has evolved over time. See the shape of your growth with daily snapshots.",badge:null},
+            {icon:"📋",name:"Holdings Table",desc:"Sortable table view with price, day change, YTD, 1Y performance, and position weight — all in one place.",badge:null},
+            {icon:"🔮",name:"More tools coming",desc:"Options analysis, sector exposure, risk metrics — the platform grows. Your data stays local, always.",badge:"SOON"},
+          ].map((tool,i)=>(
+            <div key={tool.name} style={{opacity:revealed[1]?1:0,transform:revealed[1]?"none":"translateY(16px)",transition:`opacity 0.5s ease ${i*70}ms, transform 0.5s ease ${i*70}ms`}}>
+              <ToolCard {...tool} S={S} accentGreen={accentGreen} greenBadgeBg={greenBadgeBg} greenBadgeBorder={greenBadgeBorder} />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Air-gap callout ── */}
+      <section ref={el=>revealRefs.current[2]=el} style={{position:"relative",zIndex:1,maxWidth:860,margin:"0 auto",padding:isMobile?"0 16px 48px":"0 24px 64px",opacity:revealed[2]?1:0,transform:revealed[2]?"none":"translateY(24px)",transition:"opacity 0.6s ease, transform 0.6s ease"}}>
+        <div style={{background:airGapBg,border:`1px solid ${airGapBorder}`,borderRadius:20,padding:isMobile?"28px 20px":"44px 52px",display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:40,alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:accentGreen,fontFamily:"'JetBrains Mono',monospace",marginBottom:16}}>AIR-GAPPED BY DESIGN</div>
+            <h2 style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:"clamp(24px,3.5vw,38px)",fontWeight:400,letterSpacing:"-0.02em",margin:"0 0 16px",lineHeight:1.2}}>
+              Your holdings<br /><em>never leave your device.</em>
+            </h2>
+            <p style={{color:S.muted,fontSize:14,lineHeight:1.75,marginBottom:24}}>
+              Karta is structurally air-gapped from your actual portfolio data. Tickers, share counts, and your API key live only in your browser's localStorage. Even if you wanted to send them to us — you can't. There's no endpoint to receive them.
+            </p>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {[
+                {icon:"💾",text:"Portfolio stored in browser localStorage only"},
+                {icon:"🚫",text:"No Karta server ever sees your holdings"},
+                {icon:"📡",text:"Prices fetched browser → Finnhub directly"},
+                {icon:"🔍",text:"Fully auditable in browser DevTools"},
+              ].map(item=>(
+                <div key={item.text} style={{display:"flex",alignItems:"center",gap:10,fontSize:13,color:S.muted}}>
+                  <span style={{fontSize:16,flexShrink:0}}>{item.icon}</span>
+                  {item.text}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            {/* Simple flow diagram */}
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {[
+                {label:"Your Browser",sub:"localStorage: tickers, shares, key",color:browserBoxBg,border:browserBoxBorder},
+                {label:"↕ prices only",sub:"direct HTTPS request",color:"transparent",border:"transparent",small:true},
+                {label:"Finnhub API",sub:"stock price provider",color:"rgba(59,130,246,0.1)",border:"rgba(59,130,246,0.25)"},
+                {label:"✗ Karta Servers",sub:"don't exist for this data",color:"rgba(248,113,113,0.06)",border:"rgba(248,113,113,0.2)"},
+              ].map((row,i)=>(
+                row.small
+                  ? <div key={i} style={{textAlign:"center",fontSize:12,color:S.muted,fontFamily:"'JetBrains Mono',monospace",padding:"4px 0"}}>{row.label} <span style={{fontSize:10}}>{row.sub}</span></div>
+                  : <div key={i} style={{background:row.color,border:`1px solid ${row.border}`,borderRadius:10,padding:"12px 18px",display:"flex",flexDirection:"column",gap:2}}>
+                      <div style={{fontWeight:700,fontSize:13,color:i===3?diagramRedColor:S.text}}>{row.label}</div>
+                      <div style={{fontSize:11,color:S.muted,fontFamily:"'JetBrains Mono',monospace"}}>{row.sub}</div>
+                    </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── How it works ── */}
+      <section ref={el=>revealRefs.current[3]=el} style={{position:"relative",zIndex:1,maxWidth:640,margin:"0 auto",padding:isMobile?"0 16px 48px":"0 24px 64px",opacity:revealed[3]?1:0,transform:revealed[3]?"none":"translateY(24px)",transition:"opacity 0.6s ease, transform 0.6s ease"}}>
+        <div style={{textAlign:"center",marginBottom:44}}>
+          <h2 style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:"clamp(28px,4vw,44px)",fontWeight:400,letterSpacing:"-0.02em",margin:"0 0 10px"}}>
+            Your platform, ready<br /><em>in 60 seconds.</em>
+          </h2>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:26}}>
+          {[
+            {n:"1",title:"Get a free Finnhub API key",desc:"Sign up at finnhub.io — no credit card. 60 req/min handles any personal portfolio easily."},
+            {n:"2",title:"Paste your holdings",desc:"Type tickers and share counts, or bulk-paste two columns straight from your spreadsheet."},
+            {n:"3",title:"Explore your platform",desc:"Heatmap, watchlists, correlations, history — every tool is live instantly. Nothing to install."},
+          ].map(step=>(
+            <div key={step.n} style={{display:"flex",gap:18,alignItems:"flex-start"}}>
+              <div style={{width:32,height:32,borderRadius:"50%",flexShrink:0,background:stepCircleBg,border:`1px solid ${stepCircleBorder}`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:700,color:accentGreen}}>{step.n}</div>
+              <div>
+                <div style={{fontWeight:700,fontSize:14,color:S.strong,marginBottom:4}}>{step.title}</div>
+                <div style={{fontSize:13,color:S.muted,lineHeight:1.65}}>{step.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Final CTA ── */}
+      <section ref={el=>revealRefs.current[4]=el} style={{position:"relative",zIndex:1,maxWidth:860,margin:"0 auto",padding:isMobile?"0 16px 80px":"0 24px 100px",opacity:revealed[4]?1:0,transform:revealed[4]?"none":"translateY(24px)",transition:"opacity 0.6s ease, transform 0.6s ease"}}>
+        <div style={{background:isLight?"linear-gradient(135deg,rgba(22,163,74,0.06),rgba(8,145,178,0.06))":"linear-gradient(135deg,rgba(74,222,128,0.05),rgba(34,211,238,0.05))",border:`1px solid ${airGapBorder}`,borderRadius:20,padding:isMobile?"36px 20px":"56px 40px",textAlign:"center"}}>
+          <div style={{display:"flex",justifyContent:"center",marginBottom:20}}><KartaLogo size={56} /></div>
+          <h2 style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:"clamp(26px,4vw,42px)",fontWeight:400,letterSpacing:"-0.02em",margin:"0 0 14px"}}>
+            Start analyzing. Start strategizing.
+          </h2>
+          <p style={{color:S.muted,fontSize:15,maxWidth:420,margin:"0 auto 36px",lineHeight:1.7}}>
+            No account. No tracking.<br />Your data lives in your browser — nowhere else.
+          </p>
+          <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
+            <a href="/app" style={{padding:"14px 36px",borderRadius:10,background:ctaBtnGrad,color:ctaBtnColor,fontSize:15,fontWeight:800,textDecoration:"none",boxShadow:ctaShadow,transition:"transform 0.2s"}} onMouseEnter={e=>e.currentTarget.style.transform="translateY(-2px)"} onMouseLeave={e=>e.currentTarget.style.transform=""}>Open Karta →</a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Footer ── */}
+      <footer style={{position:"relative",zIndex:1,borderTop:`1px solid ${S.border}`,padding:isMobile?"20px 16px":"24px 32px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <KartaLogo size={22} />
+          <span style={{fontFamily:"'DM Serif Display',Georgia,serif",fontSize:15,color:S.text}}>Karta</span>
+          <span style={{color:S.muted,fontSize:12}}>— private finance platform</span>
+        </div>
+        <div style={{display:"flex",gap:20}}>
+          {[["Finnhub","https://finnhub.io"],["Buy me a coffee","https://buymeacoffee.com/karta"]].map(([label,href])=>(
+            <a key={label} href={href} target="_blank" rel="noreferrer" style={{fontSize:12,color:S.muted,textDecoration:"none",transition:"color 0.2s"}} onMouseEnter={e=>e.currentTarget.style.color=S.text} onMouseLeave={e=>e.currentTarget.style.color=S.muted}>{label}</a>
+          ))}
+        </div>
+      </footer>
+
+      <style>{`
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+        body{background:${S.bg};}
+        ::selection{background:rgba(74,222,128,0.2);}
+        .v2-float-tile{animation:v2FloatUp linear infinite;will-change:transform,opacity;}
+        @keyframes v2FloatUp{0%{transform:translateY(0) rotate(0deg);opacity:0;}10%{opacity:1;}90%{opacity:1;}100%{transform:translateY(-520px) rotate(12deg);opacity:0;}}
+        .v2-ticker-wrap{overflow:hidden;width:100%;mask-image:linear-gradient(to right,transparent 0%,black 8%,black 92%,transparent 100%);-webkit-mask-image:linear-gradient(to right,transparent 0%,black 8%,black 92%,transparent 100%);border-top:1px solid ${S.border};border-bottom:1px solid ${S.border};padding:9px 0;background:${S.tickerBg};}
+        .v2-ticker-track{display:inline-flex;align-items:center;animation:v2TickerScroll 32s linear infinite;will-change:transform;white-space:nowrap;}
+        @keyframes v2TickerScroll{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
+      `}</style>
+    </div>
+  );
+}

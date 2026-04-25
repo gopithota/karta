@@ -39,39 +39,89 @@ const DEMO_TILES = [
   { t: "V",    p:  0.42, w:  6 }, { t: "BRK.B",p:  0.18, w:  5 },
 ];
 
+// Matches the exact formula used in the real app (src/utils.ts)
 function perfColor(pct) {
+  if (pct === null || pct === undefined || isNaN(pct)) return "#D1D5DB";
+  if (Math.abs(pct) < 0.2) return "#E8EAED";
   const t = Math.max(-1, Math.min(1, pct / 8));
-  if (t < 0) { const i = -t; return `rgb(${Math.round(30+190*i)},${Math.round(40-10*i)},${Math.round(40-10*i)})`; }
-  if (t > 0) return `rgb(${Math.round(25-5*t)},${Math.round(100+110*t)},${Math.round(25-5*t)})`;
-  return "#334155";
+  if (t < 0) {
+    const i = -t;
+    return `rgb(${Math.round(252 - 87*i)},${Math.round(232 - 218*i)},${Math.round(230 - 216*i)})`;
+  }
+  return `rgb(${Math.round(230 - 211*t)},${Math.round(244 - 129*t)},${Math.round(234 - 183*t)})`;
+}
+
+function demoFg(p) {
+  const strong = p != null && Math.abs(p) > 4;
+  return {
+    main: strong ? "rgba(255,255,255,0.95)" : (p >= 0 ? "#14532d" : "#7f1d1d"),
+    sub:  strong ? "rgba(255,255,255,0.80)" : (p >= 0 ? "#166534" : "#991b1b"),
+  };
+}
+
+function computeDemoTreemap(items, W, H) {
+  if (!items.length || !W || !H) return [];
+  const total = items.reduce((s, t) => s + t.w, 0);
+  const nodes = items.map(t => ({ ...t, area: (t.w / total) * W * H }));
+  function split(ns, x, y, w, h) {
+    if (!ns.length) return [];
+    if (ns.length === 1) return [{ ...ns[0], rx: x, ry: y, rw: w, rh: h }];
+    const sum = ns.reduce((s, n) => s + n.area, 0);
+    let acc = 0, si = 1;
+    for (let i = 0; i < ns.length - 1; i++) { acc += ns[i].area; si = i + 1; if (acc >= sum / 2) break; }
+    const left = ns.slice(0, si), right = ns.slice(si);
+    const r = left.reduce((s, n) => s + n.area, 0) / sum;
+    return w >= h
+      ? [...split(left, x, y, w*r, h), ...split(right, x+w*r, y, w*(1-r), h)]
+      : [...split(left, x, y, w, h*r), ...split(right, x, y+h*r, w, h*(1-r))];
+  }
+  return split(nodes, 0, 0, W, H);
 }
 
 function DemoHeatmap() {
   const [tiles, setTiles] = useState(DEMO_TILES);
+  const containerRef = useRef(null);
+  const [size, setSize] = useState({ w: 500, h: 210 });
+
   useEffect(() => {
-    const id = setInterval(() => {
-      setTiles(prev => prev.map(tile => ({
-        ...tile,
-        p: Math.max(-9, Math.min(9, tile.p + (Math.random() - 0.49) * 0.5)),
-      })));
-    }, 1400);
+    if (!containerRef.current) return;
+    const obs = new ResizeObserver(([e]) =>
+      setSize({ w: e.contentRect.width, h: e.contentRect.height })
+    );
+    obs.observe(containerRef.current);
+    return () => obs.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => setTiles(prev => prev.map(t => ({
+      ...t, p: Math.max(-9, Math.min(9, t.p + (Math.random() - 0.49) * 0.5)),
+    }))), 1400);
     return () => clearInterval(id);
   }, []);
+
+  const GAP = 3;
+  const rects = computeDemoTreemap(tiles, size.w, size.h);
+
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", width: "100%", height: "100%", gap: 3, padding: 3, boxSizing: "border-box" }}>
-      {tiles.map(tile => (
-        <div key={tile.t} style={{
-          flex: `${tile.w} ${tile.w} 0`, minWidth: 58,
-          background: perfColor(tile.p), borderRadius: 5,
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          transition: "background 1s ease", padding: "8px 4px",
-        }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: "#fff", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "-0.02em" }}>{tile.t}</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.85)", fontFamily: "'JetBrains Mono', monospace" }}>
-            {tile.p >= 0 ? "+" : ""}{tile.p.toFixed(2)}%
+    <div ref={containerRef} style={{ position: "relative", width: "100%", height: "100%" }}>
+      {rects.map(rect => {
+        const x = rect.rx + GAP, y = rect.ry + GAP;
+        const w = rect.rw - GAP*2, h = rect.rh - GAP*2;
+        if (w < 4 || h < 4) return null;
+        const fg = demoFg(rect.p);
+        return (
+          <div key={rect.t} style={{
+            position: "absolute", left: x, top: y, width: w, height: h,
+            background: perfColor(rect.p), borderRadius: 6,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            overflow: "hidden", transition: "background 1s ease",
+            boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.06)",
+          }}>
+            {w > 28 && h > 18 && <div style={{ fontSize: Math.max(9, Math.min(15, w/5.5)), fontWeight: 800, color: fg.main, lineHeight: 1.1, letterSpacing: "-0.02em", fontFamily: "'JetBrains Mono', monospace" }}>{rect.t}</div>}
+            {w > 52 && h > 36 && <div style={{ fontSize: Math.max(8, Math.min(12, w/7)), fontWeight: 600, color: fg.sub, lineHeight: 1.3, fontFamily: "'JetBrains Mono', monospace" }}>{rect.p >= 0 ? "+" : ""}{rect.p.toFixed(2)}%</div>}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -301,13 +351,6 @@ export default function Landing() {
           <span style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 20, letterSpacing: "-0.01em", color: S.text }}>Karta</span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {!isMobile && <>
-            <a href="https://buymeacoffee.com/karta" target="_blank" rel="noreferrer"
-              style={{ padding: "5px 14px", borderRadius: 8, border: `1px solid ${coffeeBorder}`, color: coffeeText, fontSize: 12, textDecoration: "none", transition: "all 0.2s" }}
-              onMouseEnter={e => { e.currentTarget.style.background = coffeeHoverBg; e.currentTarget.style.borderColor = coffeeHoverBorder; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = coffeeBorder; }}
-            >☕ Coffee</a>
-          </>}
           {ThemePicker}
           <a href="/app"
             style={{ padding: "6px 18px", borderRadius: 8, background: "#4ade80", color: "#051a0a", fontSize: 13, fontWeight: 800, textDecoration: "none", transition: "opacity 0.2s" }}
@@ -364,8 +407,7 @@ export default function Landing() {
 
         <p style={{ fontSize: 18, color: S.muted, lineHeight: 1.75, maxWidth: 500, margin: "0 auto 44px" }}>
           A Finviz-style heatmap for your personal portfolio.
-          Color-coded performance, sized by your holdings.{" "}
-          <strong style={{ color: S.strong }}>Free forever.</strong>
+          Color-coded performance, sized by your holdings.
         </p>
 
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
@@ -379,14 +421,6 @@ export default function Landing() {
             onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 12px 56px rgba(74,222,128,0.3)"; }}
             onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 0 48px rgba(74,222,128,0.2)"; }}
           >Open your map →</a>
-          <a href="https://buymeacoffee.com/karta" target="_blank" rel="noreferrer" style={{
-            padding: "15px 28px", borderRadius: 10,
-            border: `1px solid ${coffeeBorder}`, background: "transparent",
-            color: coffeeText, fontSize: 15, fontWeight: 600, textDecoration: "none", transition: "all 0.2s",
-          }}
-            onMouseEnter={e => { e.currentTarget.style.background = coffeeHoverBg; e.currentTarget.style.borderColor = coffeeHoverBorder; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = coffeeBorder; }}
-          >☕ Buy me a coffee</a>
         </div>
 
         {/* Ticker tape */}
@@ -432,7 +466,6 @@ export default function Landing() {
       <section ref={el => revealRefs.current[0] = el} style={{ position: "relative", zIndex: 1, maxWidth: 820, margin: "0 auto", padding: isMobile ? "0 16px 48px" : "0 24px 64px", opacity: revealed[0] ? 1 : 0, transform: revealed[0] ? "none" : "translateY(24px)", transition: "opacity 0.6s ease, transform 0.6s ease" }}>
         <div style={{ background: S.statsBg, border: `1px solid ${S.border}`, borderRadius: 16, padding: isMobile ? "28px 20px" : "40px 48px", display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 32 }}>
           <UserCounter S={S} />
-          <Stat value="Free" label="FOREVER · NO ADS" S={S} />
           <Stat value="0 kb" label="DATA SENT TO SERVERS" S={S} />
         </div>
       </section>
@@ -571,10 +604,6 @@ export default function Landing() {
               onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
               onMouseLeave={e => e.currentTarget.style.transform = ""}
             >Open Karta →</a>
-            <a href="https://buymeacoffee.com/karta" target="_blank" rel="noreferrer" style={{ padding: "14px 28px", borderRadius: 10, border: `1px solid ${coffeeBorder}`, background: "transparent", color: coffeeText, fontSize: 15, fontWeight: 600, textDecoration: "none", transition: "all 0.2s" }}
-              onMouseEnter={e => { e.currentTarget.style.background = coffeeHoverBg; e.currentTarget.style.borderColor = coffeeHoverBorder; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = coffeeBorder; }}
-            >☕ Buy me a coffee</a>
           </div>
         </div>
       </section>
