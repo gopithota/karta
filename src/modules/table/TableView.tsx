@@ -4,6 +4,7 @@ export default function TableView() {
   const S          = usePortfolioStore(s => s.S);
   const stockData  = usePortfolioStore(s => s.stockData);
   const portfolio  = usePortfolioStore(s => s.portfolio);
+  const isMobile   = usePortfolioStore(s => s.isMobile);
 
   const getWeight = (ticker: string) => {
     const d = stockData[ticker];
@@ -23,14 +24,19 @@ export default function TableView() {
     );
   }
 
+  const cp = isMobile ? "7px 10px" : "9px 14px"; // cell padding
+  const HEADERS = isMobile
+    ? ["Ticker", "Price", "Shrs", "Value", "Wt", "1D"]
+    : ["Ticker", "Price", "Shares", "Value", "Weight", "Today"];
+
   return (
-    <div style={{ position: "absolute", inset: 0, overflow: "auto", padding: "20px" }}>
-      <div style={{ maxWidth: 1020, margin: "0 auto", overflowX: "auto", WebkitOverflowScrolling: "touch", background: S.panel, borderRadius: 10, border: `1px solid ${S.border}` }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+    <div style={{ position: "absolute", inset: 0, overflow: "auto", padding: isMobile ? "12px 0" : "20px" }}>
+      <div style={{ maxWidth: 1020, margin: "0 auto", overflowX: "auto", WebkitOverflowScrolling: "touch", background: S.panel, borderRadius: isMobile ? 0 : 10, border: isMobile ? "none" : `1px solid ${S.border}`, borderTop: `1px solid ${S.border}`, borderBottom: `1px solid ${S.border}` }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: isMobile ? 12 : 13 }}>
           <thead>
             <tr style={{ borderBottom: `1px solid ${S.border}`, position: "sticky", top: 0, background: S.panel }}>
-              {["Ticker", "Price", "Shares", "Value", "Weight", "Today"].map((h, i) => (
-                <th key={h} style={{ padding: "10px 14px", textAlign: i === 0 ? "left" : "right", color: S.muted, fontWeight: 600, fontSize: 12, letterSpacing: "0.03em", whiteSpace: "nowrap" }}>{h}</th>
+              {HEADERS.map((h, i) => (
+                <th key={h} style={{ padding: cp, textAlign: i === 0 ? "left" : "right", color: S.muted, fontWeight: 600, fontSize: isMobile ? 11 : 12, letterSpacing: "0.03em", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -42,12 +48,12 @@ export default function TableView() {
               const w = totalValue > 0 ? (val / totalValue) * 100 : 0;
               return (
                 <tr key={ticker} style={{ borderBottom: `1px solid ${S.rowBorder}` }}>
-                  <td style={{ padding: "9px 14px", fontWeight: 800, fontSize: 14 }}>{ticker}</td>
-                  <td style={{ padding: "9px 14px", textAlign: "right" }}>${d.price.toFixed(2)}</td>
-                  <td style={{ padding: "9px 14px", textAlign: "right", color: S.muted }}>{shares}</td>
-                  <td style={{ padding: "9px 14px", textAlign: "right", fontWeight: 600 }}>${val.toLocaleString("en-US", { maximumFractionDigits: 0 })}</td>
-                  <td style={{ padding: "9px 14px", textAlign: "right", color: S.muted }}>{w.toFixed(1)}%</td>
-                  <td style={{ padding: "9px 14px", textAlign: "right", color: d.today == null ? S.subtext : d.today >= 0 ? S.green : "#f87171", fontWeight: 600 }}>
+                  <td style={{ padding: cp, fontWeight: 800, fontSize: isMobile ? 13 : 14 }}>{ticker}</td>
+                  <td style={{ padding: cp, textAlign: "right" }}>${d.price.toFixed(2)}</td>
+                  <td style={{ padding: cp, textAlign: "right", color: S.muted }}>{shares}</td>
+                  <td style={{ padding: cp, textAlign: "right", fontWeight: 600 }}>${val.toLocaleString("en-US", { maximumFractionDigits: 0 })}</td>
+                  <td style={{ padding: cp, textAlign: "right", color: S.muted }}>{w.toFixed(1)}%</td>
+                  <td style={{ padding: cp, textAlign: "right", color: d.today == null ? S.subtext : d.today >= 0 ? S.green : "#f87171", fontWeight: 600 }}>
                     {d.today == null ? "—" : `${d.today >= 0 ? "+" : ""}${d.today.toFixed(2)}%`}
                   </td>
                 </tr>

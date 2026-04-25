@@ -75,14 +75,14 @@ export default function SetupView() {
           <div style={{ background: S.panel, borderRadius: 10, border: `1px solid ${S.border}`, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.12)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderBottom: `1px solid ${S.border}` }}>
               <div style={{ fontSize: 20 }}>📡</div>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontWeight: 700, fontSize: 14, color: S.text }}>Powered by Finnhub</span>
                   <span style={{ fontSize: 10, fontWeight: 700, background: S.badgeFreeBg, color: S.badgeFreeText, padding: "2px 6px", borderRadius: 4 }}>FREE</span>
                 </div>
-                <div style={{ fontSize: 12, color: S.muted, marginTop: 2 }}>Real-time quotes · Historical candle data · 60 req/min · No credit card needed</div>
+                <div style={{ fontSize: 12, color: S.muted, marginTop: 2 }}>Real-time quotes · Historical candles · 60 req/min</div>
               </div>
-              <a href="https://finnhub.io/register" target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 600, color: S.green, textDecoration: "none", whiteSpace: "nowrap" }}>Get free key →</a>
+              {!isMobile && <a href="https://finnhub.io/register" target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 600, color: S.green, textDecoration: "none", whiteSpace: "nowrap" }}>Get free key →</a>}
             </div>
 
             <div style={{ padding: 20 }}>
@@ -102,7 +102,7 @@ export default function SetupView() {
                   </div>
                 </div>
               )}
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 8 }}>
                 <input
                   type="password"
                   value={apiInput}
@@ -111,7 +111,7 @@ export default function SetupView() {
                   placeholder="Paste your Finnhub API key here…"
                   style={{ flex: 1, padding: "8px 12px", borderRadius: 7, border: `1px solid ${S.border}`, background: S.inputBg, color: S.text, fontSize: 14, outline: "none" }}
                 />
-                <button onClick={saveApiKey} disabled={!apiInput} style={{ padding: "8px 18px", borderRadius: 7, border: "none", cursor: apiInput ? "pointer" : "not-allowed", background: S.accent, color: "#fff", fontSize: 14, fontWeight: 700, opacity: !apiInput ? 0.5 : 1 }}>Save & Load</button>
+                <button onClick={saveApiKey} disabled={!apiInput} style={{ padding: "10px 18px", borderRadius: 7, border: "none", cursor: apiInput ? "pointer" : "not-allowed", background: S.accent, color: "#fff", fontSize: 14, fontWeight: 700, opacity: !apiInput ? 0.5 : 1, whiteSpace: "nowrap" }}>Save & Load</button>
               </div>
               <div style={{ fontSize: 12, color: S.muted, marginTop: 8 }}>
                 Free at <a href="https://finnhub.io/register" target="_blank" rel="noreferrer" style={{ color: S.link }}>finnhub.io/register</a> — takes 2 minutes.

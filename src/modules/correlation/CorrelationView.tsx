@@ -61,6 +61,13 @@ export default function CorrelationView() {
   const [paletteIdx, setPaletteIdx] = useState(0);
   const corrColor = useMemo(() => makeCellColor(paletteIdx), [paletteIdx]);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [containerW, setContainerW] = useState(0);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const obs = new ResizeObserver(([e]) => setContainerW(e.contentRect.width));
+    obs.observe(containerRef.current);
+    return () => obs.disconnect();
+  }, []);
 
   // Recompute whenever the correlation tab becomes active or candle data arrives
   useEffect(() => {
@@ -93,7 +100,17 @@ export default function CorrelationView() {
   const n        = tickers.length;
   const maxLabel = tickers.reduce((m, t) => Math.max(m, t.length), 0);
   const labelW   = Math.max(36, maxLabel * 7 + 8);
-  const cellSize = isMobile ? 32 : 44;
+  // On mobile, shrink cells to fit the available width without horizontal scroll when possible
+  const cellSize = (() => {
+    const minCell = isMobile ? 26 : 36;
+    const maxCell = isMobile ? 36 : 52;
+    const fallback = isMobile ? 32 : 44;
+    if (!containerW || !n) return fallback;
+    const hPad = isMobile ? 16 : 48;
+    const gapEst = 4 * 3; // rough gap estimate before gapCount is known
+    const available = containerW - labelW - gapEst - hPad;
+    return Math.max(minCell, Math.min(maxCell, Math.floor(available / n)));
+  })();
   const gridW    = labelW + n * cellSize;
   const gridH    = labelW + n * cellSize;
 

@@ -185,7 +185,7 @@ function CyclingWord({gradient}) {
       transition: "opacity 0.32s ease, transform 0.32s ease",
       background: gradient,
       WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-      minWidth: 220, textAlign: "left",
+      minWidth: "clamp(120px, 35vw, 220px)", textAlign: "left",
     }}>
       {CYCLE_WORDS[idx]}
     </span>
@@ -316,7 +316,7 @@ export default function LandingV2() {
         <div style={{
           position:"relative",zIndex:1,
           width:"100%",maxWidth:1320,margin:"0 auto",
-          padding:isMobile?"88px 16px 48px":"100px 48px 72px",
+          padding:isMobile?"72px 16px 60px":"100px 48px 72px",
           display:"grid",
           gridTemplateColumns:isMobile?"1fr":"1fr 1fr",
           gap:isMobile?40:"6vw",

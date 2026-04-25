@@ -98,14 +98,14 @@ export default function Header() {
         gridTemplateColumns: "1fr auto 1fr",
         alignItems: "center",
         padding: isMobile ? "8px 12px" : "12px 18px",
-        borderBottom: `1px solid ${S.border}`,
+        borderBottom: isMobile ? "none" : `1px solid ${S.border}`,
         flexShrink: 0,
         gap: 8,
       }}>
 
-        {/* Left: logo + return + value */}
-        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 12, minWidth: 0 }}>
-          <a href="/" title="Back to Karta home" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none", color: "inherit", minWidth: 0 }}>
+        {/* Left: logo + name (+ return + value on desktop) */}
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 10, minWidth: 0, overflow: "hidden" }}>
+          <a href="/" title="Back to Karta home" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none", color: "inherit", minWidth: 0, flex: 1, overflow: "hidden" }}>
             <svg width="22" height="22" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
               {([["#2a6040","#3a7a52","#4a9966"],["#3a7a52","#4a9966","#5ab878"],["#4a9966","#5ab878","#4ade80"],["#235238","#4a9966","#22c55e"]] as string[][]).map((row, ri) =>
                 row.map((fill, ci) => {
@@ -115,18 +115,18 @@ export default function Header() {
                 })
               )}
             </svg>
-            <span style={{ fontSize: isMobile ? 14 : 18, fontWeight: 800, letterSpacing: "-0.5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: isMobile ? 110 : "none" }}>{portfolioName}</span>
+            <span style={{ fontSize: isMobile ? 14 : 18, fontWeight: 800, letterSpacing: "-0.5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{portfolioName}</span>
           </a>
           {aggReturn !== null && !isMobile && (
             <span style={{ fontSize: 13, fontWeight: 700, color: aggReturn >= 0 ? S.green : "#f87171", flexShrink: 0 }}>
               {aggReturn >= 0 ? "▲" : "▼"} {Math.abs(aggReturn).toFixed(2)}%
             </span>
           )}
-          {totalValue > 0 && (
+          {totalValue > 0 && !isMobile && (
             <button
               onClick={() => setPrivacyMode(p => !p)}
               title={privacyMode ? "Show portfolio value" : "Hide portfolio value"}
-              style={{ display: "flex", alignItems: "center", gap: 5, padding: isMobile ? "3px 7px" : "3px 10px", borderRadius: 5, border: `1px solid ${S.border}`, background: S.panel, color: privacyMode ? S.muted : S.text, cursor: "pointer", fontSize: 12, flexShrink: 0 }}
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 5, border: `1px solid ${S.border}`, background: S.panel, color: privacyMode ? S.muted : S.text, cursor: "pointer", fontSize: 12, flexShrink: 0 }}
             >
               {privacyMode ? (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -140,11 +140,9 @@ export default function Header() {
                   <circle cx="12" cy="12" r="3"/>
                 </svg>
               )}
-              {!isMobile && (
-                <span style={{ fontWeight: 600, letterSpacing: privacyMode ? "0.15em" : 0 }}>
-                  {privacyMode ? "••••••" : `$${totalValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
-                </span>
-              )}
+              <span style={{ fontWeight: 600, letterSpacing: privacyMode ? "0.15em" : 0 }}>
+                {privacyMode ? "••••••" : `$${totalValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+              </span>
             </button>
           )}
         </div>
@@ -160,7 +158,6 @@ export default function Header() {
               borderRadius: 9,
               padding: `${PILL_PAD}px`,
             }}>
-              {/* Animated pill */}
               <div style={{
                 position: "absolute",
                 top: PILL_PAD, bottom: PILL_PAD, left: PILL_PAD,
@@ -180,7 +177,7 @@ export default function Header() {
                   style={{
                     position: "relative", zIndex: 1,
                     flex: 1,
-                    padding: isMobile ? "3px 10px" : "4px 16px",
+                    padding: isMobile ? "4px 10px" : "4px 16px",
                     border: "none",
                     cursor: "pointer",
                     fontSize: isMobile ? 11 : 12,
@@ -189,7 +186,7 @@ export default function Header() {
                     color: heatmapView === seg.key ? S.tabActiveText : S.muted,
                     transition: "color 0.22s",
                     whiteSpace: "nowrap",
-                    minWidth: isMobile ? 58 : 72,
+                    minWidth: isMobile ? 52 : 72,
                     borderRadius: 6,
                   }}
                 >
@@ -200,21 +197,83 @@ export default function Header() {
           )}
         </div>
 
-        {/* Right: lock badge + tab buttons */}
-        <div style={{ display: "flex", gap: isMobile ? 3 : 4, alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>
-          {!isMobile && (
-            <div title="Your portfolio is stored locally in your browser only. Nothing is sent to our servers." style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(74,222,128,0.2)", background: S.greenDim, fontSize: 11, color: S.green, fontWeight: 600, cursor: "default", letterSpacing: "0.02em" }}>
-              🔒 Local only
-            </div>
+        {/* Right: on desktop = lock badge + tabs; on mobile = return + privacy button */}
+        <div style={{ display: "flex", gap: isMobile ? 6 : 4, alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>
+          {isMobile ? (
+            <>
+              {aggReturn !== null && (
+                <span style={{ fontSize: 12, fontWeight: 700, color: aggReturn >= 0 ? S.green : "#f87171", flexShrink: 0 }}>
+                  {aggReturn >= 0 ? "▲" : "▼"} {Math.abs(aggReturn).toFixed(2)}%
+                </span>
+              )}
+              {totalValue > 0 && (
+                <button
+                  onClick={() => setPrivacyMode(p => !p)}
+                  title={privacyMode ? "Show value" : "Hide value"}
+                  style={{ display: "flex", alignItems: "center", padding: "4px 8px", borderRadius: 5, border: `1px solid ${S.border}`, background: S.panel, color: S.muted, cursor: "pointer" }}
+                >
+                  {privacyMode ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  )}
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <div title="Your portfolio is stored locally in your browser only. Nothing is sent to our servers." style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(74,222,128,0.2)", background: S.greenDim, fontSize: 11, color: S.green, fontWeight: 600, cursor: "default", letterSpacing: "0.02em" }}>
+                🔒 Local only
+              </div>
+              {visibleTabs.map(key => (
+                <button key={key} onClick={() => handleTabClick(key)} style={{ ...btnBase(tab === key), padding: "5px 13px", fontSize: 13 }}>
+                  {TAB_LABELS[key].label}
+                </button>
+              ))}
+            </>
           )}
-          {visibleTabs.map(key => (
-            <button key={key} onClick={() => handleTabClick(key)} style={{ ...btnBase(tab === key), textTransform: "capitalize", padding: isMobile ? "5px 9px" : "5px 13px", fontSize: isMobile ? 12 : 13 }}>
-              {isMobile ? TAB_LABELS[key].short : TAB_LABELS[key].label}
-            </button>
-          ))}
         </div>
 
       </div>
+
+      {/* ── Mobile tab strip (full-width, below header) ──────────── */}
+      {isMobile && (
+        <div style={{
+          display: "flex",
+          borderBottom: `1px solid ${S.border}`,
+          flexShrink: 0,
+          background: S.bg,
+        }}>
+          {visibleTabs.map(key => (
+            <button
+              key={key}
+              onClick={() => handleTabClick(key)}
+              style={{
+                flex: 1,
+                padding: "9px 4px",
+                border: "none",
+                borderBottom: tab === key ? `2px solid ${S.tabActiveBorder}` : "2px solid transparent",
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: tab === key ? 700 : 500,
+                background: "transparent",
+                color: tab === key ? S.tabActiveText : S.muted,
+                transition: "color 0.15s, border-color 0.15s",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {TAB_LABELS[key].short}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Toolbar ─────────────────────────────────────────────── */}
       {showToolbar && (
