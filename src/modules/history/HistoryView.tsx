@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { usePortfolioStore } from "../../store/usePortfolioStore";
 import HistoryChart from "./HistoryChart";
 
@@ -5,16 +6,18 @@ export default function HistoryView() {
   const S                = usePortfolioStore(s => s.S);
   const history          = usePortfolioStore(s => s.history);
   const portfolioEvents  = usePortfolioStore(s => s.portfolioEvents);
-  const setHistory       = usePortfolioStore(s => s.setHistory);
+  const setHistory         = usePortfolioStore(s => s.setHistory);
   const setPortfolioEvents = usePortfolioStore(s => s.setPortfolioEvents);
-  const seedDemoHistory  = usePortfolioStore(s => s.seedDemoHistory);
-  const editingEventIdx  = usePortfolioStore(s => s.editingEventIdx);
-  const editingNote      = usePortfolioStore(s => s.editingNote);
-  const hoveredEventIdx  = usePortfolioStore(s => s.hoveredEventIdx);
-  const setEditingEventIdx = usePortfolioStore(s => s.setEditingEventIdx);
-  const setEditingNote   = usePortfolioStore(s => s.setEditingNote);
-  const setHoveredEventIdx = usePortfolioStore(s => s.setHoveredEventIdx);
-  const saveEventNote    = usePortfolioStore(s => s.saveEventNote);
+  const seedDemoHistory    = usePortfolioStore(s => s.seedDemoHistory);
+  const saveEventNote      = usePortfolioStore(s => s.saveEventNote);
+
+  const [editingGroupDate, setEditingGroupDate] = useState<string | null>(null);
+  const [groupNote, setGroupNote] = useState("");
+
+  const saveGroupNote = (indices: number[], note: string) => {
+    indices.forEach(idx => saveEventNote(idx, note));
+    setEditingGroupDate(null);
+  };
 
   const first = history[0];
   const last  = history[history.length - 1];
@@ -79,71 +82,79 @@ export default function HistoryView() {
           <HistoryChart history={history} events={portfolioEvents} S={S} />
         </div>
 
-        {/* Portfolio changes list */}
-        {portfolioEvents.length > 0 && (
-          <div style={{ background: S.panel, borderRadius: 10, border: `1px solid ${S.border}`, marginTop: 16, overflow: "hidden" }}>
-            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${S.border}`, fontSize: 13, fontWeight: 700, color: S.text }}>
-              Portfolio Changes ({portfolioEvents.length})
-            </div>
-            <div style={{ maxHeight: 260, overflowY: "auto" }}>
-              {[...portfolioEvents].reverse().map((ev, i) => {
-                const origIdx = portfolioEvents.length - 1 - i;
-                const isEditing = editingEventIdx === origIdx;
-                const isHovered = hoveredEventIdx === origIdx;
-                return (
-                  <div
-                    key={i}
-                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", borderBottom: `1px solid ${S.rowBorder}`, background: isEditing ? S.bg : "transparent", transition: "background 0.12s" }}
-                    onMouseEnter={() => setHoveredEventIdx(origIdx)}
-                    onMouseLeave={() => setHoveredEventIdx(null)}
-                  >
-                    <span style={{ fontSize: 15, fontWeight: 800, color: ev.type === "add" ? S.green : ev.type === "remove" ? "#f87171" : S.link, minWidth: 14 }}>
-                      {ev.type === "add" ? "+" : ev.type === "remove" ? "−" : "~"}
-                    </span>
-                    <span style={{ fontWeight: 700, fontSize: 13, minWidth: 56 }}>{ev.ticker}</span>
-                    <span style={{ fontSize: 12, color: S.muted, whiteSpace: "nowrap" }}>
-                      {ev.type === "add"    ? `Added ${ev.shares} shares`
-                        : ev.type === "remove" ? `Removed ${ev.shares} shares`
-                        : `Updated: ${ev.prevShares} → ${ev.shares} shares`}
-                    </span>
+        {/* Portfolio changes list — grouped by date */}
+        {portfolioEvents.length > 0 && (() => {
+          const groups: { date: string; evts: typeof portfolioEvents; indices: number[] }[] = [];
+          [...portfolioEvents].reverse().forEach((ev, revI) => {
+            const origIdx = portfolioEvents.length - 1 - revI;
+            const last = groups[groups.length - 1];
+            if (last && last.date === ev.date) {
+              last.evts.push(ev);
+              last.indices.push(origIdx);
+            } else {
+              groups.push({ date: ev.date, evts: [ev], indices: [origIdx] });
+            }
+          });
 
-                    {isEditing ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 5, flex: 1, minWidth: 0 }}>
-                        <input
-                          autoFocus
-                          value={editingNote}
-                          onChange={e => setEditingNote(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === "Enter") saveEventNote(origIdx, editingNote);
-                            if (e.key === "Escape") setEditingEventIdx(null);
-                          }}
-                          placeholder="Add a note…"
-                          maxLength={160}
-                          style={{ flex: 1, minWidth: 0, padding: "3px 8px", borderRadius: 5, border: `1px solid ${S.green}55`, background: S.inputBg, color: S.text, fontSize: 12, outline: "none", fontStyle: "italic" }}
-                        />
-                        <button onClick={() => saveEventNote(origIdx, editingNote)} title="Save (Enter)" style={{ background: "none", border: "none", cursor: "pointer", color: S.green, fontSize: 15, padding: "0 2px", lineHeight: 1, flexShrink: 0 }}>✓</button>
-                        <button onClick={() => setEditingEventIdx(null)} title="Cancel (Esc)" style={{ background: "none", border: "none", cursor: "pointer", color: S.muted, fontSize: 13, padding: "0 2px", lineHeight: 1, flexShrink: 0 }}>✕</button>
+          return (
+            <div style={{ background: S.panel, borderRadius: 10, border: `1px solid ${S.border}`, marginTop: 16, overflow: "hidden" }}>
+              <div style={{ padding: "12px 16px", borderBottom: `1px solid ${S.border}`, fontSize: 13, fontWeight: 700, color: S.text }}>
+                Portfolio Changes ({groups.length} {groups.length === 1 ? "session" : "sessions"})
+              </div>
+              <div style={{ maxHeight: 280, overflowY: "auto" }}>
+                {groups.map(({ date, evts, indices }) => {
+                  const isEditing = editingGroupDate === date;
+                  const blockNote = evts[0].note ?? null;
+                  return (
+                    <div key={date} style={{ padding: "10px 16px", borderBottom: `1px solid ${S.rowBorder}` }}>
+                      <div style={{ fontSize: 11, color: S.muted, fontWeight: 600, marginBottom: 6 }}>
+                        {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "2-digit" })}
                       </div>
-                    ) : (
-                      <div style={{ display: "flex", alignItems: "center", gap: 5, flex: 1, minWidth: 0 }}>
-                        <span onClick={() => { setEditingEventIdx(origIdx); setEditingNote(ev.note || ""); }} title={ev.note || "Click to add note"} style={{ fontSize: 11, color: ev.note ? S.muted : S.subtext, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: isHovered ? "text" : "default", opacity: ev.note ? 1 : isHovered ? 0.6 : 0, transition: "opacity 0.15s" }}>
-                          {ev.note || "add note…"}
-                        </span>
-                        {isHovered && (
-                          <button onClick={() => { setEditingEventIdx(origIdx); setEditingNote(ev.note || ""); }} title="Edit note" style={{ background: "none", border: "none", cursor: "pointer", color: S.emphasis, fontSize: 13, padding: "0 2px", lineHeight: 1, flexShrink: 0, opacity: 0.75, transform: "scaleX(-1)", display: "inline-block" }}>✎</button>
-                        )}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 6 }}>
+                        {evts.map((ev, i) => (
+                          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 4, background: ev.type === "add" ? `${S.green}18` : ev.type === "remove" ? "#f8717118" : `${S.link}18`, fontSize: 12 }}>
+                            <span style={{ fontWeight: 800, color: ev.type === "add" ? S.green : ev.type === "remove" ? "#f87171" : S.link }}>
+                              {ev.type === "add" ? "+" : ev.type === "remove" ? "−" : "~"}
+                            </span>
+                            <span style={{ fontWeight: 700, color: S.text }}>{ev.ticker}</span>
+                            <span style={{ color: S.muted, fontSize: 11 }}>
+                              {ev.type === "update" ? `${ev.prevShares}→${ev.shares}sh` : `${ev.shares}sh`}
+                            </span>
+                          </span>
+                        ))}
                       </div>
-                    )}
-
-                    <span style={{ fontSize: 11, color: S.muted, whiteSpace: "nowrap", flexShrink: 0 }}>
-                      {new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })}
-                    </span>
-                  </div>
-                );
-              })}
+                      {isEditing ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <input
+                            autoFocus
+                            value={groupNote}
+                            onChange={e => setGroupNote(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") saveGroupNote(indices, groupNote);
+                              if (e.key === "Escape") setEditingGroupDate(null);
+                            }}
+                            placeholder="Add a note…"
+                            maxLength={160}
+                            style={{ flex: 1, padding: "3px 8px", borderRadius: 5, border: `1px solid ${S.green}55`, background: S.inputBg, color: S.text, fontSize: 12, outline: "none", fontStyle: "italic" }}
+                          />
+                          <button onClick={() => saveGroupNote(indices, groupNote)} title="Save (Enter)" style={{ background: "none", border: "none", cursor: "pointer", color: S.green, fontSize: 15, padding: "0 2px", lineHeight: 1 }}>✓</button>
+                          <button onClick={() => setEditingGroupDate(null)} title="Cancel (Esc)" style={{ background: "none", border: "none", cursor: "pointer", color: S.muted, fontSize: 13, padding: "0 2px", lineHeight: 1 }}>✕</button>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => { setEditingGroupDate(date); setGroupNote(blockNote || ""); }}
+                          style={{ fontSize: 11, color: blockNote ? S.muted : S.subtext, fontStyle: "italic", cursor: "text", opacity: blockNote ? 1 : 0.45 }}
+                        >
+                          {blockNote || "add note…"}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Clear history */}
         {(history.length > 0 || portfolioEvents.length > 0) && (

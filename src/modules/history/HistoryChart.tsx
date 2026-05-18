@@ -157,14 +157,23 @@ export default function HistoryChart({ history, events, S }: Props) {
           >
             <line x1={em.x} x2={em.x} y1={PAD.top} y2={PAD.top + cH} stroke={em.color} strokeWidth={1.5} strokeDasharray="4,3" opacity={0.65} />
             <line x1={em.x} x2={em.x} y1={PAD.top} y2={PAD.top + cH} stroke="transparent" strokeWidth={14} />
-            <circle cx={em.x} cy={PAD.top + 2} r={5} fill={em.color} />
+            <polygon points={`${em.x},${PAD.top - 4} ${em.x + 5},${PAD.top + 2} ${em.x},${PAD.top + 8} ${em.x - 5},${PAD.top + 2}`} fill={em.color} />
           </g>
         ))}
+
+        {validRanges.slice(0, -1).map(({ end }, si) => {
+          const p1 = pts[end];
+          const p2 = pts[validRanges[si + 1].start];
+          return (
+            <line key={`gap-${si}`} x1={p1.x.toFixed(1)} y1={p1.y.toFixed(1)} x2={p2.x.toFixed(1)} y2={p2.y.toFixed(1)} stroke={lineColor} strokeWidth={1.5} strokeDasharray="4,5" opacity={0.38} />
+          );
+        })}
 
         {validRanges.map(({ start, end }, si) => {
           const segPts = pts.slice(start, end + 1);
           if (segPts.length === 1) {
-            return <circle key={si} cx={segPts[0].x} cy={segPts[0].y} r={5} fill={lineColor} />;
+            const { x, y } = segPts[0];
+            return <polygon key={si} points={`${x.toFixed(1)},${(y - 6).toFixed(1)} ${(x + 5).toFixed(1)},${y.toFixed(1)} ${x.toFixed(1)},${(y + 6).toFixed(1)} ${(x - 5).toFixed(1)},${y.toFixed(1)}`} fill={lineColor} />;
           }
           const segLine = segPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
           const baseline = (PAD.top + cH).toFixed(1);
